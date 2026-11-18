@@ -859,16 +859,51 @@ public class StockService {
 
     @Transactional
     public StockItemView shipStockItemToCustomer(UUID stockItemId, UUID customerId, String notes) {
+        return shipAllocatedStockToCustomer(stockItemId, null, customerId, notes);
+    }
+
+    @Transactional
+    public StockItemView shipAllocatedStockToCustomer(UUID stockItemId, BigDecimal quantity, UUID customerId, String notes) {
         StockItem item = requireStockItemForUpdate(stockItemId);
-        boolean wasInStock = item.countsTowardInStock();
-        item.setCustomerId(customerId);
-        item.setLocationId(null);
-        StockItem saved = stockItemRepository.saveAndFlush(item);
-        recordTracking(saved, "SHIPPED_TO_CUSTOMER", saved.getQuantity().negate(), BigDecimal.ZERO, null, notes);
-        if (wasInStock) {
-            deltaAccumulator.addInStockDelta(saved.getPartId(), saved.getQuantity().negate());
+        BigDecimal shipQty = quantity != null ? quantity : item.getQuantity();
+        if (shipQty.compareTo(BigDecimal.ZERO) <= 0 || shipQty.compareTo(item.getQuantity()) > 0) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Invalid shipment quantity");
         }
-        return enrichSingleStockItem(saved);
+        boolean wasInStock = item.countsTowardInStock();
+        if (shipQty.compareTo(item.getQuantity()) == 0) {
+            item.setCustomerId(customerId);
+            item.setLocationId(null);
+            StockItem saved = stockItemRepository.saveAndFlush(item);
+            recordTracking(saved, "SHIPPED_TO_CUSTOMER", saved.getQuantity().negate(), BigDecimal.ZERO, null, notes);
+            if (wasInStock) {
+                deltaAccumulator.addInStockDelta(saved.getPartId(), saved.getQuantity().negate());
+            }
+            return enrichSingleStockItem(saved);
+        }
+        // Partial shipment from an untracked lot: decrement source lot and create shipped child item
+        BigDecimal remaining = item.getQuantity().subtract(shipQty);
+        item.setQuantity(remaining);
+        stockItemRepository.saveAndFlush(item);
+        recordTracking(item, "SHIPPED_TO_CUSTOMER", shipQty.negate(), remaining, item.getLocationId(), notes);
+
+        StockItem shipped = new StockItem();
+        shipped.setPartId(item.getPartId());
+        shipped.setLocationId(null);
+        shipped.setCustomerId(customerId);
+        shipped.setParentItemId(item.getId());
+        shipped.setQuantity(shipQty);
+        shipped.setBatchCode(item.getBatchCode());
+        shipped.setStatus(item.getStatus());
+        shipped.setExpiryDate(item.getExpiryDate());
+        shipped.setPurchasePrice(item.getPurchasePrice());
+        shipped.setCurrency(item.getCurrency());
+        shipped.setPackaging(item.getPackaging());
+        StockItem savedShipped = stockItemRepository.saveAndFlush(shipped);
+        recordTracking(savedShipped, "SHIPPED_TO_CUSTOMER", shipQty, shipQty, null, notes);
+        if (wasInStock) {
+            deltaAccumulator.addInStockDelta(item.getPartId(), shipQty.negate());
+        }
+        return enrichSingleStockItem(savedShipped);
     }
 
     @Transactional

@@ -54,9 +54,14 @@ public class TenantPredicateInspector implements StatementInspector, HibernatePr
             "purchase_order_line_items",
             "purchase_order_extra_lines",
             "sales_orders",
+            "sales_order_line_items",
             "sales_order_shipments",
+            "sales_order_allocations",
             "return_orders",
+            "return_order_line_items",
             "transfer_orders",
+            "transfer_order_line_items",
+            "report_templates",
             "webhook_subscriptions"
     );
 
