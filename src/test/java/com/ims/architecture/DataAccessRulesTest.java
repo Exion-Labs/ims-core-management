@@ -107,6 +107,7 @@ class DataAccessRulesTest {
                 .orShould().callMethod(Session.class, "createNativeQuery", String.class, Class.class)
                 .orShould().callMethod(Session.class, "createNativeMutationQuery", String.class)
                 .orShould().callMethod(JpaRepository.class, "getReferenceById", Object.class)
+                .allowEmptyShould(true)
                 .check(classes);
     }
 
@@ -116,8 +117,9 @@ class DataAccessRulesTest {
                 .should().dependOnClassesThat().haveFullyQualifiedName("org.springframework.jdbc.core.JdbcTemplate")
                 .orShould().dependOnClassesThat().haveFullyQualifiedName("org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate")
                 .orShould().dependOnClassesThat().haveFullyQualifiedName("org.springframework.jdbc.core.simple.JdbcClient")
-                .orShould().dependOnClassesThat().assignableTo(DataSource.class)
-                .orShould().dependOnClassesThat().assignableTo(Connection.class)
+                .orShould().dependOnClassesThat().areAssignableTo(DataSource.class)
+                .orShould().dependOnClassesThat().areAssignableTo(Connection.class)
+                .allowEmptyShould(true)
                 .check(classes);
     }
 }

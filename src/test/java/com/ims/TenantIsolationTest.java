@@ -3,7 +3,7 @@ package com.ims;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ims.common.audit.AuditEvent;
-import com.ims.common.audit.AuditEventRepository;
+import com.ims.common.audit.AuditService;
 import com.ims.common.entitlement.EntitlementService;
 import com.ims.common.entitlement.Feature;
 import com.ims.common.entitlement.TenantFeatureOverride;
@@ -111,7 +111,7 @@ class TenantIsolationTest {
     private TenantSettingRepository tenantSettingRepository;
 
     @Autowired
-    private AuditEventRepository auditEventRepository;
+    private AuditService auditService;
 
     @Autowired
     private OutboxWriter outboxWriter;
@@ -274,7 +274,7 @@ class TenantIsolationTest {
 
         // Verify AuditEvent was written with before/after diff
         TenantContext.runAs(tenantA.tenantId(), () -> {
-            Page<AuditEvent> audits = auditEventRepository.search(
+            Page<AuditEvent> audits = auditService.search(
                     "TenantSetting", null, null, "UPDATE", null, null, PageRequest.of(0, 10)
             );
             assertThat(audits.getContent()).isNotEmpty();
@@ -295,7 +295,7 @@ class TenantIsolationTest {
         ).isInstanceOf(RuntimeException.class);
 
         TenantContext.runAs(tenantA.tenantId(), () -> {
-            Page<AuditEvent> audits = auditEventRepository.search(
+            Page<AuditEvent> audits = auditService.search(
                     "TenantSetting", null, null, "UPDATE", null, null, PageRequest.of(0, 10)
             );
             assertThat(audits.getContent())
@@ -312,7 +312,7 @@ class TenantIsolationTest {
                 .andExpect(status().isUnauthorized());
 
         TenantContext.runAs(tenantA.tenantId(), () -> {
-            Page<AuditEvent> failedLogins = auditEventRepository.search(
+            Page<AuditEvent> failedLogins = auditService.search(
                     "UserAccount", null, null, "LOGIN_FAILED", null, null, PageRequest.of(0, 10)
             );
             assertThat(failedLogins.getContent()).isNotEmpty();
@@ -320,7 +320,7 @@ class TenantIsolationTest {
 
         // 4. Tenant B never sees Tenant A's audit events
         TenantContext.runAs(tenantB.tenantId(), () -> {
-            Page<AuditEvent> bFailedLogins = auditEventRepository.search(
+            Page<AuditEvent> bFailedLogins = auditService.search(
                     "UserAccount", null, null, "LOGIN_FAILED", null, null, PageRequest.of(0, 10)
             );
             assertThat(bFailedLogins.getContent()).isEmpty();

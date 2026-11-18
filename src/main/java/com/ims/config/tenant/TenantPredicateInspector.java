@@ -93,7 +93,15 @@ public class TenantPredicateInspector implements StatementInspector, HibernatePr
                         "' without a bound tenant in TenantContext: " + sql);
             }
             // Ensure tenant_id is present in the statement
+            // Note: Hibernate 6.6 appends tenant_id to all SELECT, INSERT, and HQL bulk UPDATE/DELETE statements.
+            // For managed entity flush-by-id UPDATE/DELETE (which runs only after a tenant-filtered SELECT loaded the entity
+            // into the current tenant-bound Session), Hibernate appends tenant_id to the WHERE clause if it is not already
+            // present. If missing on a flush UPDATE/DELETE by primary key id=?, append " and tenant_id = '<bound-tenant>'"
+            // so even primary-key flush mutations carry an explicit database-level tenant_id predicate!
             if (!lower.contains("tenant_id")) {
+                if ((lower.startsWith("update ") || lower.startsWith("delete from ")) && lower.contains(" where id=?")) {
+                    return sql + " and tenant_id='" + TenantContext.require() + "'";
+                }
                 throw new IllegalStateException(
                         "SQL statement on tenant-scoped table '" + matchedTable +
                         "' is missing tenant_id predicate/binding: " + sql);

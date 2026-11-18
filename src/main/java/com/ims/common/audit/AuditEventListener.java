@@ -210,7 +210,7 @@ public class AuditEventListener implements PostInsertEventListener, PostUpdateEv
         if (val == null) {
             return null;
         }
-        if (val instanceof Number || val instanceof Boolean || val instanceof String || val instanceof Map<?> || val instanceof List<?>) {
+        if (val instanceof Number || val instanceof Boolean || val instanceof String || val instanceof Map<?, ?> || val instanceof List<?>) {
             return val;
         }
         return val.toString();

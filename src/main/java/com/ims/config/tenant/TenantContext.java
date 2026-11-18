@@ -7,48 +7,41 @@ import java.util.UUID;
 import java.util.concurrent.Callable;
 
 /**
- * Holds the currently bound tenant ID for the active execution scope.
- * Never returns a default value when unbound: TenantContext.require() fails fast.
+ * Holds the currently bound tenant ID using Java 25 ScopedValue.
+ * Scoped Values are automatically removed when the request/task scope exits,
+ * preventing any possibility of tenant leakage across pooled or virtual threads.
  */
 public final class TenantContext {
 
-    private static final ThreadLocal<UUID> CURRENT_TENANT = new ThreadLocal<>();
+    public static final ScopedValue<UUID> TENANT = ScopedValue.newInstance();
 
     private TenantContext() {
     }
 
     public static UUID require() {
-        UUID tenantId = CURRENT_TENANT.get();
-        if (tenantId == null) {
+        if (!TENANT.isBound()) {
             throw new IllegalStateException("No tenant bound in TenantContext. Tenant-scoped data access is forbidden outside a bound tenant scope.");
         }
-        return tenantId;
+        return TENANT.get();
     }
 
     public static Optional<UUID> current() {
-        return Optional.ofNullable(CURRENT_TENANT.get());
+        return TENANT.isBound() ? Optional.of(TENANT.get()) : Optional.empty();
     }
 
     public static boolean isBound() {
-        return CURRENT_TENANT.get() != null;
+        return TENANT.isBound();
     }
 
     public static void runAs(UUID tenantId, Runnable action) {
         if (tenantId == null) {
             throw new IllegalArgumentException("tenantId must not be null");
         }
-        UUID previous = CURRENT_TENANT.get();
         String previousMdc = MDC.get("tenantId");
         try {
-            CURRENT_TENANT.set(tenantId);
             MDC.put("tenantId", tenantId.toString());
-            action.run();
+            ScopedValue.where(TENANT, tenantId).run(action);
         } finally {
-            if (previous != null) {
-                CURRENT_TENANT.set(previous);
-            } else {
-                CURRENT_TENANT.remove();
-            }
             if (previousMdc != null) {
                 MDC.put("tenantId", previousMdc);
             } else {
@@ -61,18 +54,11 @@ public final class TenantContext {
         if (tenantId == null) {
             throw new IllegalArgumentException("tenantId must not be null");
         }
-        UUID previous = CURRENT_TENANT.get();
         String previousMdc = MDC.get("tenantId");
         try {
-            CURRENT_TENANT.set(tenantId);
             MDC.put("tenantId", tenantId.toString());
-            return action.call();
+            return ScopedValue.where(TENANT, tenantId).call(action::call);
         } finally {
-            if (previous != null) {
-                CURRENT_TENANT.set(previous);
-            } else {
-                CURRENT_TENANT.remove();
-            }
             if (previousMdc != null) {
                 MDC.put("tenantId", previousMdc);
             } else {

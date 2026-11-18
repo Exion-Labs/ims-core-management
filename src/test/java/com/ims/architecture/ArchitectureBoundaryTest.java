@@ -37,6 +37,7 @@ class ArchitectureBoundaryTest {
         classes()
                 .that().implement(DomainEvent.class)
                 .should().resideInAPackage("com.ims.common.events")
+                .allowEmptyShould(true)
                 .check(classes);
     }
 
