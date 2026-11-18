@@ -1,0 +1,118 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "IMS Multi-Tenant API",
+    "description": "Multi-Tenant Inventory Management System REST API",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/auth/register-tenant": {
+      "post": {
+        "tags": ["auth-controller"],
+        "operationId": "onboard",
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": ["auth-controller"],
+        "operationId": "signIn",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "tags": ["auth-controller"],
+        "operationId": "rotate",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": ["auth-controller"],
+        "operationId": "signOut",
+        "responses": { "204": { "description": "No Content" } }
+      }
+    },
+    "/api/v1/me": {
+      "get": {
+        "tags": ["tenant-settings-controller"],
+        "operationId": "getMe",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/v1/settings/organization": {
+      "patch": {
+        "tags": ["tenant-settings-controller"],
+        "operationId": "updateOrg",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/v1/settings/users": {
+      "get": {
+        "tags": ["tenant-settings-controller"],
+        "operationId": "listUsers",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/v1/settings/users/invite": {
+      "post": {
+        "tags": ["tenant-settings-controller"],
+        "operationId": "inviteUser",
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/api/v1/settings/roles": {
+      "get": {
+        "tags": ["tenant-settings-controller"],
+        "operationId": "listRoles",
+        "responses": { "200": { "description": "OK" } }
+      },
+      "post": {
+        "tags": ["tenant-settings-controller"],
+        "operationId": "createRole",
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/api/v1/settings/api-tokens": {
+      "get": {
+        "tags": ["tenant-settings-controller"],
+        "operationId": "listApiTokens",
+        "responses": { "200": { "description": "OK" } }
+      },
+      "post": {
+        "tags": ["tenant-settings-controller"],
+        "operationId": "createApiToken",
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/api/v1/settings/sequences": {
+      "get": {
+        "tags": ["tenant-settings-controller"],
+        "operationId": "listSequences",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/v1/settings/audit-events": {
+      "get": {
+        "tags": ["tenant-settings-controller"],
+        "operationId": "searchAuditEvents",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/v1/attachments/upload-url": {
+      "post": {
+        "tags": ["attachment-controller"],
+        "operationId": "requestUploadUrl",
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/api/v1/imports/sessions": {
+      "post": {
+        "tags": ["import-controller"],
+        "operationId": "createSession",
+        "responses": { "201": { "description": "Created" } }
+      }
+    }
+  }
+}
