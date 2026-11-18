@@ -40,12 +40,12 @@ public class PostgresFunctionContributor implements FunctionContributor {
         );
         registry.registerPattern(
                 "subpath",
-                "subpath(?1::ltree, ?2)::text",
+                "subpath(?1::ltree, ?2)",
                 stringType
         );
         registry.registerPattern(
                 "ltree_concat",
-                "(?1::ltree || ?2::ltree)::text",
+                "(?1::ltree || ?2::ltree)",
                 stringType
         );
 

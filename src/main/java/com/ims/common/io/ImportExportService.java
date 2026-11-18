@@ -321,6 +321,10 @@ public class ImportExportService {
         }
     }
 
+    public String getSessionTargetType(UUID sessionId) {
+        return requireTenantSession(sessionId).targetType();
+    }
+
     private StoredImportSession requireTenantSession(UUID sessionId) {
         UUID tenantId = TenantContext.require();
         StoredImportSession session = sessions.get(sessionId);

@@ -12,6 +12,7 @@ import com.ims.config.security.JwtTokenService;
 import com.ims.config.security.TenantAuthAndContextFilter;
 import com.ims.config.security.TenantUserPrincipal;
 import com.ims.config.tenant.TenantContext;
+import com.ims.part.PartService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -97,6 +98,7 @@ public class TenantManagementService {
     private final AuditService auditService;
     private final ImportExportService importExportService;
     private final PasswordEncoder passwordEncoder;
+    private final PartService partService;
 
     public TenantManagementService(
             TenantRepository tenantRepository,
@@ -109,7 +111,8 @@ public class TenantManagementService {
             EntitlementService entitlementService,
             AuditService auditService,
             ImportExportService importExportService,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            PartService partService
     ) {
         this.tenantRepository = tenantRepository;
         this.userAccountRepository = userAccountRepository;
@@ -122,6 +125,7 @@ public class TenantManagementService {
         this.auditService = auditService;
         this.importExportService = importExportService;
         this.passwordEncoder = passwordEncoder;
+        this.partService = partService;
     }
 
     @Transactional(readOnly = true)
@@ -141,7 +145,7 @@ public class TenantManagementService {
 
         Map<String, Long> usage = new LinkedHashMap<>();
         usage.put(Feature.MAX_USERS.name(), activeUsers);
-        usage.put(Feature.MAX_PARTS.name(), 0L);
+        usage.put(Feature.MAX_PARTS.name(), partService.countParts());
         usage.put(Feature.MAX_LOCATIONS.name(), 0L);
         usage.put(Feature.MAX_WEBHOOKS.name(), 0L);
         usage.put(Feature.STORAGE_MB.name(), 0L);

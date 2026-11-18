@@ -109,4 +109,3 @@ CREATE TABLE part_parameters (
 
 -- B-tree index on (tenant_id, template_id, value_numeric) so range queries like "capacitance between 1uF and 10uF" use an index scan
 CREATE INDEX idx_part_parameters_numeric_range ON part_parameters(tenant_id, template_id, value_numeric);
-CREATE INDEX idx_part_parameters_part ON part_parameters(tenant_id, part_id);

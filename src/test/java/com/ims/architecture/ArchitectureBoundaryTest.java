@@ -1,6 +1,7 @@
 package com.ims.architecture;
 
 import com.ims.common.audit.AuditEventRepository;
+import com.ims.common.entitlement.RequiresFeature;
 import com.ims.common.events.DomainEvent;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
@@ -90,6 +91,33 @@ class ArchitectureBoundaryTest {
         SlicesRuleDefinition.slices()
                 .matching("com.ims.(part|stock|company|build|order|integration).(*)..")
                 .should().beFreeOfCycles()
+                .allowEmptyShould(true)
+                .check(classes);
+    }
+
+    @Test
+    void domainControllersMustBeAnnotatedWithRequiresFeature() {
+        classes()
+                .that().areAnnotatedWith(RestController.class)
+                .and().resideInAnyPackage(
+                        "com.ims.part..",
+                        "com.ims.stock..",
+                        "com.ims.company..",
+                        "com.ims.build..",
+                        "com.ims.order..",
+                        "com.ims.integration.."
+                )
+                .should().beAnnotatedWith(RequiresFeature.class)
+                .allowEmptyShould(true)
+                .check(classes);
+    }
+
+    @Test
+    void partRepositoriesMustOnlyBeAccessedWithinPartPackage() {
+        classes()
+                .that().resideInAPackage("com.ims.part..")
+                .and().haveSimpleNameEndingWith("Repository")
+                .should().onlyBeAccessed().byAnyPackage("com.ims.part..")
                 .allowEmptyShould(true)
                 .check(classes);
     }

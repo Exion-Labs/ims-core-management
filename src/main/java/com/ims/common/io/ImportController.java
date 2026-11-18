@@ -1,5 +1,6 @@
 package com.ims.common.io;
 
+import com.ims.part.PartService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -18,6 +19,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
 
 @RestController
 @RequestMapping("/api/v1/imports")
@@ -29,9 +31,11 @@ public class ImportController {
     ) {}
 
     private final ImportExportService importExportService;
+    private final PartService partService;
 
-    public ImportController(ImportExportService importExportService) {
+    public ImportController(ImportExportService importExportService, PartService partService) {
         this.importExportService = importExportService;
+        this.partService = partService;
     }
 
     @PostMapping(value = "/sessions", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -48,11 +52,16 @@ public class ImportController {
             @PathVariable UUID sessionId,
             @Valid @RequestBody DryRunRequest request
     ) {
+        String targetType = importExportService.getSessionTargetType(sessionId);
+        Function<Map<String, String>, List<ImportExportService.RowValidationError>> customValidator = null;
+        if ("PART".equalsIgnoreCase(targetType) || "PARTS".equalsIgnoreCase(targetType)) {
+            customValidator = partService::validatePartImportRow;
+        }
         return importExportService.dryRun(
                 sessionId,
                 request.columnMapping(),
                 request.requiredFields() != null ? request.requiredFields() : List.of(),
-                null
+                customValidator
         );
     }
 
@@ -61,11 +70,18 @@ public class ImportController {
             @PathVariable UUID sessionId,
             @Valid @RequestBody DryRunRequest request
     ) {
+        String targetType = importExportService.getSessionTargetType(sessionId);
+        Function<Map<String, String>, Boolean> rowCommitter = row -> true;
+        if ("PART".equalsIgnoreCase(targetType) || "PARTS".equalsIgnoreCase(targetType) || "PartCatalogPreview".equalsIgnoreCase(targetType)) {
+            rowCommitter = partService::commitImportedPartRow;
+        } else if ("PART_PARAMETER".equalsIgnoreCase(targetType)) {
+            rowCommitter = partService::commitImportedPartParameterRow;
+        }
         return importExportService.commit(
                 sessionId,
                 request.columnMapping(),
                 request.requiredFields() != null ? request.requiredFields() : List.of(),
-                row -> true
+                rowCommitter
         );
     }
 }
