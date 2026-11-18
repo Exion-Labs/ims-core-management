@@ -1,6 +1,7 @@
 package com.ims.common.io;
 
 import com.ims.company.CompanyService;
+import com.ims.part.BomService;
 import com.ims.part.PartService;
 import com.ims.stock.StockService;
 import jakarta.validation.Valid;
@@ -34,17 +35,20 @@ public class ImportController {
 
     private final ImportExportService importExportService;
     private final PartService partService;
+    private final BomService bomService;
     private final StockService stockService;
     private final CompanyService companyService;
 
     public ImportController(
             ImportExportService importExportService,
             PartService partService,
+            BomService bomService,
             StockService stockService,
             CompanyService companyService
     ) {
         this.importExportService = importExportService;
         this.partService = partService;
+        this.bomService = bomService;
         this.stockService = stockService;
         this.companyService = companyService;
     }
@@ -91,6 +95,8 @@ public class ImportController {
             rowCommitter = stockService::commitImportedStockRow;
         } else if ("SUPPLIER_PART".equalsIgnoreCase(targetType)) {
             rowCommitter = companyService::commitImportedSupplierPartRow;
+        } else if ("BOM".equalsIgnoreCase(targetType) || "BOM_ITEM".equalsIgnoreCase(targetType)) {
+            rowCommitter = bomService::commitImportedBomRow;
         }
         return importExportService.commit(
                 sessionId,

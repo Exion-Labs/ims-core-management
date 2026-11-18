@@ -816,6 +816,105 @@ public class StockService {
         deltaAccumulator.addAllocatedToSalesDelta(partId, delta);
     }
 
+    public List<StockItem> findAvailableFifoForUpdate(UUID partId) {
+        return stockItemRepository.findAvailableFifoByPartIdForUpdate(partId);
+    }
+
+    @Transactional
+    public StockItemView completeBuildOutputItem(UUID outputStockItemId, UUID destinationLocationId, String notes) {
+        StockItem item = requireStockItemForUpdate(outputStockItemId);
+        if (!item.isBuilding()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Stock item is not an in-progress build output");
+        }
+        if (destinationLocationId != null) {
+            StockLocation loc = locationService.requireLocation(destinationLocationId);
+            if (loc.isStructural()) {
+                throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Destination location cannot be structural");
+            }
+            item.setLocationId(destinationLocationId);
+        }
+        item.setBuilding(false);
+        StockItem saved = stockItemRepository.saveAndFlush(item);
+        recordTracking(saved, "BUILD_OUTPUT_COMPLETED", saved.getQuantity(), saved.getQuantity(), saved.getLocationId(), notes);
+        deltaAccumulator.addInProductionDelta(saved.getPartId(), saved.getQuantity().negate());
+        if (saved.countsTowardInStock()) {
+            deltaAccumulator.addInStockDelta(saved.getPartId(), saved.getQuantity());
+        }
+        return enrichSingleStockItem(saved);
+    }
+
+    @Transactional
+    public StockItemView installStockItemIntoAssembly(UUID componentStockItemId, UUID assemblyStockItemId, String notes) {
+        StockItem component = requireStockItemForUpdate(componentStockItemId);
+        requireStockItem(assemblyStockItemId);
+        boolean wasInStock = component.countsTowardInStock();
+        component.setInstalledInId(assemblyStockItemId);
+        StockItem saved = stockItemRepository.saveAndFlush(component);
+        recordTracking(saved, "INSTALLED_IN_ASSEMBLY", saved.getQuantity().negate(), BigDecimal.ZERO, saved.getLocationId(), notes);
+        if (wasInStock) {
+            deltaAccumulator.addInStockDelta(saved.getPartId(), saved.getQuantity().negate());
+        }
+        return enrichSingleStockItem(saved);
+    }
+
+    @Transactional
+    public StockItemView shipStockItemToCustomer(UUID stockItemId, UUID customerId, String notes) {
+        StockItem item = requireStockItemForUpdate(stockItemId);
+        boolean wasInStock = item.countsTowardInStock();
+        item.setCustomerId(customerId);
+        item.setLocationId(null);
+        StockItem saved = stockItemRepository.saveAndFlush(item);
+        recordTracking(saved, "SHIPPED_TO_CUSTOMER", saved.getQuantity().negate(), BigDecimal.ZERO, null, notes);
+        if (wasInStock) {
+            deltaAccumulator.addInStockDelta(saved.getPartId(), saved.getQuantity().negate());
+        }
+        return enrichSingleStockItem(saved);
+    }
+
+    @Transactional
+    public StockItemView returnStockItemFromCustomer(UUID stockItemId, UUID quarantineLocationId, String status, String notes) {
+        StockItem item = requireStockItemForUpdate(stockItemId);
+        if (quarantineLocationId != null) {
+            StockLocation loc = locationService.requireLocation(quarantineLocationId);
+            if (loc.isStructural()) {
+                throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Quarantine location cannot be structural");
+            }
+        }
+        boolean wasInStock = item.countsTowardInStock();
+        item.setCustomerId(null);
+        item.setLocationId(quarantineLocationId);
+        item.setStatus(status != null ? status : StockItem.Status.QUARANTINED.name());
+        StockItem saved = stockItemRepository.saveAndFlush(item);
+        recordTracking(saved, "RETURNED_FROM_CUSTOMER", saved.getQuantity(), saved.getQuantity(), quarantineLocationId, notes);
+        if (!wasInStock && saved.countsTowardInStock()) {
+            deltaAccumulator.addInStockDelta(saved.getPartId(), saved.getQuantity());
+        }
+        return enrichSingleStockItem(saved);
+    }
+
+    @Transactional
+    public StockItemView updateStockStatus(UUID stockItemId, String newStatus, UUID newLocationId, String notes) {
+        StockItem item = requireStockItemForUpdate(stockItemId);
+        boolean wasInStock = item.countsTowardInStock();
+        item.setStatus(newStatus);
+        if (newLocationId != null) {
+            StockLocation loc = locationService.requireLocation(newLocationId);
+            if (loc.isStructural()) {
+                throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Location cannot be structural");
+            }
+            item.setLocationId(newLocationId);
+        }
+        StockItem saved = stockItemRepository.saveAndFlush(item);
+        boolean nowInStock = saved.countsTowardInStock();
+        if (!wasInStock && nowInStock) {
+            deltaAccumulator.addInStockDelta(saved.getPartId(), saved.getQuantity());
+        } else if (wasInStock && !nowInStock) {
+            deltaAccumulator.addInStockDelta(saved.getPartId(), saved.getQuantity().negate());
+        }
+        recordTracking(saved, "STATUS_CHANGED", BigDecimal.ZERO, saved.getQuantity(), saved.getLocationId(), notes);
+        return enrichSingleStockItem(saved);
+    }
+
     // =========================================================================
     // 2.5 Quality Control (PartTestTemplate & StockItemTestResult)
     // =========================================================================
