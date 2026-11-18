@@ -1,6 +1,7 @@
 package com.ims.common.io;
 
 import com.ims.part.PartService;
+import com.ims.stock.StockService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -32,10 +33,12 @@ public class ImportController {
 
     private final ImportExportService importExportService;
     private final PartService partService;
+    private final StockService stockService;
 
-    public ImportController(ImportExportService importExportService, PartService partService) {
+    public ImportController(ImportExportService importExportService, PartService partService, StockService stockService) {
         this.importExportService = importExportService;
         this.partService = partService;
+        this.stockService = stockService;
     }
 
     @PostMapping(value = "/sessions", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -76,6 +79,8 @@ public class ImportController {
             rowCommitter = partService::commitImportedPartRow;
         } else if ("PART_PARAMETER".equalsIgnoreCase(targetType)) {
             rowCommitter = partService::commitImportedPartParameterRow;
+        } else if ("STOCK".equalsIgnoreCase(targetType) || "STOCK_ITEM".equalsIgnoreCase(targetType)) {
+            rowCommitter = stockService::commitImportedStockRow;
         }
         return importExportService.commit(
                 sessionId,

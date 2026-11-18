@@ -13,6 +13,7 @@ import com.ims.config.security.TenantAuthAndContextFilter;
 import com.ims.config.security.TenantUserPrincipal;
 import com.ims.config.tenant.TenantContext;
 import com.ims.part.PartService;
+import com.ims.stock.StockLocationService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -99,6 +100,7 @@ public class TenantManagementService {
     private final ImportExportService importExportService;
     private final PasswordEncoder passwordEncoder;
     private final PartService partService;
+    private final StockLocationService stockLocationService;
 
     public TenantManagementService(
             TenantRepository tenantRepository,
@@ -112,7 +114,8 @@ public class TenantManagementService {
             AuditService auditService,
             ImportExportService importExportService,
             PasswordEncoder passwordEncoder,
-            PartService partService
+            PartService partService,
+            StockLocationService stockLocationService
     ) {
         this.tenantRepository = tenantRepository;
         this.userAccountRepository = userAccountRepository;
@@ -126,6 +129,7 @@ public class TenantManagementService {
         this.importExportService = importExportService;
         this.passwordEncoder = passwordEncoder;
         this.partService = partService;
+        this.stockLocationService = stockLocationService;
     }
 
     @Transactional(readOnly = true)
@@ -146,7 +150,7 @@ public class TenantManagementService {
         Map<String, Long> usage = new LinkedHashMap<>();
         usage.put(Feature.MAX_USERS.name(), activeUsers);
         usage.put(Feature.MAX_PARTS.name(), partService.countParts());
-        usage.put(Feature.MAX_LOCATIONS.name(), 0L);
+        usage.put(Feature.MAX_LOCATIONS.name(), stockLocationService.countLocations());
         usage.put(Feature.MAX_WEBHOOKS.name(), 0L);
         usage.put(Feature.STORAGE_MB.name(), 0L);
         usage.put("ACTIVE_API_TOKENS", activeTokens);

@@ -121,4 +121,14 @@ class ArchitectureBoundaryTest {
                 .allowEmptyShould(true)
                 .check(classes);
     }
+
+    @Test
+    void stockRepositoriesMustOnlyBeAccessedWithinStockPackage() {
+        classes()
+                .that().resideInAPackage("com.ims.stock..")
+                .and().haveSimpleNameEndingWith("Repository")
+                .should().onlyBeAccessed().byAnyPackage("com.ims.stock..")
+                .allowEmptyShould(true)
+                .check(classes);
+    }
 }

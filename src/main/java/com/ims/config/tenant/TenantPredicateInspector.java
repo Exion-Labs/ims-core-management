@@ -44,6 +44,7 @@ public class TenantPredicateInspector implements StatementInspector, HibernatePr
             "stock_locations",
             "stock_items",
             "stock_item_tracking",
+            "part_test_templates",
             "stock_item_test_results",
             "part_stock_summaries",
             "build_orders",
