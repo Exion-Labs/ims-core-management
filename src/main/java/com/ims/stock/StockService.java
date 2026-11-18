@@ -780,6 +780,42 @@ public class StockService {
                 .toList();
     }
 
+    @Transactional
+    public void adjustOnOrderDelta(UUID partId, BigDecimal delta) {
+        if (partId == null || delta == null || delta.compareTo(BigDecimal.ZERO) == 0) {
+            return;
+        }
+        deltaAccumulator.ensureSummaryRowExists(partId);
+        deltaAccumulator.addOnOrderDelta(partId, delta);
+    }
+
+    @Transactional
+    public void adjustAllocatedToBuildsDelta(UUID partId, BigDecimal delta) {
+        if (partId == null || delta == null || delta.compareTo(BigDecimal.ZERO) == 0) {
+            return;
+        }
+        deltaAccumulator.ensureSummaryRowExists(partId);
+        deltaAccumulator.addAllocatedToBuildsDelta(partId, delta);
+    }
+
+    @Transactional
+    public void adjustInProductionDelta(UUID partId, BigDecimal delta) {
+        if (partId == null || delta == null || delta.compareTo(BigDecimal.ZERO) == 0) {
+            return;
+        }
+        deltaAccumulator.ensureSummaryRowExists(partId);
+        deltaAccumulator.addInProductionDelta(partId, delta);
+    }
+
+    @Transactional
+    public void adjustAllocatedToSalesDelta(UUID partId, BigDecimal delta) {
+        if (partId == null || delta == null || delta.compareTo(BigDecimal.ZERO) == 0) {
+            return;
+        }
+        deltaAccumulator.ensureSummaryRowExists(partId);
+        deltaAccumulator.addAllocatedToSalesDelta(partId, delta);
+    }
+
     // =========================================================================
     // 2.5 Quality Control (PartTestTemplate & StockItemTestResult)
     // =========================================================================
