@@ -61,6 +61,7 @@ public class TenantAuthAndContextFilter extends OncePerRequestFilter {
     private final EntitlementService entitlementService;
     private final ObjectMapper objectMapper;
     private final String expectedProxySecret;
+    private final org.springframework.beans.factory.ObjectProvider<SseTicketTenantLookup> sseTicketLookup;
     private final Map<UUID, RateWindow> tokenRateWindows = new ConcurrentHashMap<>();
 
     public TenantAuthAndContextFilter(
@@ -70,7 +71,8 @@ public class TenantAuthAndContextFilter extends OncePerRequestFilter {
             TenantRepository tenantRepository,
             EntitlementService entitlementService,
             ObjectMapper objectMapper,
-            @Value("${ims.security.proxy-secret:ims-dev-bff-proxy-secret-2026}") String expectedProxySecret
+            @Value("${ims.security.proxy-secret:ims-dev-bff-proxy-secret-2026}") String expectedProxySecret,
+            org.springframework.beans.factory.ObjectProvider<SseTicketTenantLookup> sseTicketLookup
     ) {
         this.jwtTokenService = jwtTokenService;
         this.apiTokenRepository = apiTokenRepository;
@@ -79,6 +81,12 @@ public class TenantAuthAndContextFilter extends OncePerRequestFilter {
         this.entitlementService = entitlementService;
         this.objectMapper = objectMapper;
         this.expectedProxySecret = expectedProxySecret;
+        this.sseTicketLookup = sseTicketLookup;
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        return request.getRequestURI().startsWith("/api/platform/");
     }
 
     @Override
@@ -95,6 +103,21 @@ public class TenantAuthAndContextFilter extends OncePerRequestFilter {
 
         String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            // Check SSE ticket for GET /api/v1/events?ticket=...
+            if ("/api/v1/events".equals(request.getRequestURI()) && request.getParameter("ticket") != null) {
+                SseTicketTenantLookup lookup = sseTicketLookup.getIfAvailable();
+                Optional<UUID> ticketTenant = lookup != null ? lookup.peekTenantIdForTicket(request.getParameter("ticket")) : Optional.empty();
+                if (ticketTenant.isPresent()) {
+                    TenantContext.runAs(ticketTenant.get(), () -> {
+                        try {
+                            filterChain.doFilter(request, response);
+                        } catch (IOException | ServletException e) {
+                            throw new RuntimeException(e);
+                        }
+                    });
+                    return;
+                }
+            }
             // Unauthenticated endpoint (e.g., /api/v1/auth/login): run with AuditContext only, no TenantContext bound
             AuditContext.Snapshot anonSnap = new AuditContext.Snapshot(
                     AuditContext.ActorType.USER, null, "ANONYMOUS", null, requestId, clientIp

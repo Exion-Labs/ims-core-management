@@ -28,16 +28,20 @@ import java.util.UUID;
 public class JwtTokenService {
 
     public static final String AUDIENCE_TENANT = "ims-tenant";
+    public static final String AUDIENCE_PLATFORM = "ims-platform";
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final SecretKey tenantSigningKey;
+    private final SecretKey platformSigningKey;
     private final Duration accessTokenTtl;
 
     public JwtTokenService(
             @Value("${ims.security.jwt-secret:ims-dev-tenant-jwt-secret-key-must-be-at-least-32-bytes-long-2026}") String jwtSecret,
+            @Value("${ims.security.platform-jwt-secret:ims-dev-platform-jwt-secret-key-must-be-at-least-32-bytes-2026}") String platformJwtSecret,
             @Value("${ims.security.access-token-minutes:10}") long accessTokenMinutes
     ) {
         this.tenantSigningKey = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
+        this.platformSigningKey = Keys.hmacShaKeyFor(platformJwtSecret.getBytes(StandardCharsets.UTF_8));
         this.accessTokenTtl = Duration.ofMinutes(accessTokenMinutes);
     }
 
@@ -80,6 +84,38 @@ public class JwtTokenService {
         Set<String> perms = permsList != null ? Set.copyOf(permsList) : Set.of();
 
         return new TenantUserPrincipal(userId, tenantId, email, name, perms, false, null);
+    }
+
+    public record PlatformUserPrincipal(UUID userId, String email, String fullName, String role) {}
+
+    public String createPlatformAccessToken(UUID userId, String email, String fullName, String role) {
+        Instant now = Instant.now();
+        Instant expiry = now.plus(Duration.ofMinutes(60));
+        return Jwts.builder()
+                .subject(userId.toString())
+                .audience().add(AUDIENCE_PLATFORM).and()
+                .claim("email", email)
+                .claim("name", fullName)
+                .claim("role", role)
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(expiry))
+                .signWith(platformSigningKey)
+                .compact();
+    }
+
+    public PlatformUserPrincipal parsePlatformAccessToken(String token) {
+        Claims claims = Jwts.parser()
+                .verifyWith(platformSigningKey)
+                .requireAudience(AUDIENCE_PLATFORM)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+        return new PlatformUserPrincipal(
+                UUID.fromString(claims.getSubject()),
+                claims.get("email", String.class),
+                claims.get("name", String.class),
+                claims.get("role", String.class)
+        );
     }
 
     public long getAccessTokenTtlSeconds() {
