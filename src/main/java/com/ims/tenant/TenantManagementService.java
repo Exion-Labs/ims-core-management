@@ -133,6 +133,14 @@ public class TenantManagementService {
     }
 
     @Transactional(readOnly = true)
+    public String getCurrentTenantBaseCurrency() {
+        UUID tenantId = TenantContext.require();
+        return tenantRepository.findById(tenantId)
+                .map(Tenant::getBaseCurrency)
+                .orElse("USD");
+    }
+
+    @Transactional(readOnly = true)
     public MeResponse getMe(TenantUserPrincipal principal) {
         UUID tenantId = TenantContext.require();
         Tenant tenant = tenantRepository.findById(tenantId)

@@ -6,6 +6,7 @@ import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
 import com.ims.common.entitlement.Feature;
 import com.ims.common.entitlement.RequiresFeature;
+import com.ims.company.CompanyService;
 import com.ims.part.Part;
 import com.ims.part.PartService;
 import org.springframework.http.HttpStatus;
@@ -42,19 +43,22 @@ public class BarcodeService {
     private final StockService stockService;
     private final StockLocationService locationService;
     private final PartService partService;
+    private final CompanyService companyService;
 
     public BarcodeService(
             StockItemRepository stockItemRepository,
             StockLocationRepository locationRepository,
             StockService stockService,
             StockLocationService locationService,
-            PartService partService
+            PartService partService,
+            CompanyService companyService
     ) {
         this.stockItemRepository = stockItemRepository;
         this.locationRepository = locationRepository;
         this.stockService = stockService;
         this.locationService = locationService;
         this.partService = partService;
+        this.companyService = companyService;
     }
 
     public byte[] generateBarcodePng(String payload, String format, int width, int height) {
@@ -112,6 +116,21 @@ public class BarcodeService {
         Optional<StockLocation> byLocCustom = locationRepository.findByCustomBarcode(code);
         if (byLocCustom.isPresent()) {
             return toLocationResult(code, locationService.getLocation(byLocCustom.get().getId()));
+        }
+
+        // 3b. Match customBarcode on SupplierPart (Phase 3)
+        Optional<CompanyService.SupplierPartView> bySupplierBarcode = companyService.findByCustomBarcode(code);
+        if (bySupplierBarcode.isPresent()) {
+            CompanyService.SupplierPartView sp = bySupplierBarcode.get();
+            return new ScanResolutionResult(
+                    "SUPPLIER_PART",
+                    sp.id(),
+                    code,
+                    sp.supplierName() + " SKU " + sp.sku(),
+                    sp.partIpn() + " · Pack of " + sp.packQuantity() + " " + sp.partUnit(),
+                    "/parts/" + sp.partId(),
+                    sp
+            );
         }
 
         // 4. Direct UUID match (StockItem -> StockLocation -> Part)
