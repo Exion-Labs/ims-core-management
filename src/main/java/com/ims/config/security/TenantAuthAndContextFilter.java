@@ -154,6 +154,11 @@ public class TenantAuthAndContextFilter extends OncePerRequestFilter {
                 writeError(response, HttpStatus.UNAUTHORIZED, "INVALID_TOKEN", "Invalid or expired access token.");
                 return;
             }
+            if (principal.permissions().isEmpty()) {
+                writeError(response, HttpStatus.UNAUTHORIZED, "EMPTY_PERMISSIONS_TOKEN",
+                        "Session token has empty permissions; trigger token refresh.");
+                return;
+            }
         }
 
         // Gate on Tenant status (ACTIVE vs SUSPENDED / DELETED)

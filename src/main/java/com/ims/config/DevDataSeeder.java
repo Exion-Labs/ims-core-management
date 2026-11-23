@@ -3,6 +3,8 @@ package com.ims.config;
 import com.ims.config.tenant.TenantContext;
 import com.ims.part.PartCategoryService;
 import com.ims.part.PartService;
+import com.ims.stock.StockLocationService;
+import com.ims.stock.StockService;
 import com.ims.tenant.AuthService;
 import com.ims.tenant.TenantRepository;
 import org.slf4j.Logger;
@@ -13,9 +15,10 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
- * Seeds two demo tenants (Tenant A on STARTER, Tenant B on PRO) and sample Phase 1 catalog data
+ * Seeds two demo tenants (Tenant A on STARTER, Tenant B on PRO) and sample catalog & stock data
  * so login, multi-tenant isolation, RBAC, and the Part Catalog can be explored immediately.
  */
 @Component
@@ -27,17 +30,23 @@ public class DevDataSeeder implements CommandLineRunner {
     private final TenantRepository tenantRepository;
     private final PartCategoryService categoryService;
     private final PartService partService;
+    private final StockLocationService stockLocationService;
+    private final StockService stockService;
 
     public DevDataSeeder(
             AuthService authService,
             TenantRepository tenantRepository,
             PartCategoryService categoryService,
-            PartService partService
+            PartService partService,
+            StockLocationService stockLocationService,
+            StockService stockService
     ) {
         this.authService = authService;
         this.tenantRepository = tenantRepository;
         this.categoryService = categoryService;
         this.partService = partService;
+        this.stockLocationService = stockLocationService;
+        this.stockService = stockService;
     }
 
     @Override
@@ -58,10 +67,12 @@ public class DevDataSeeder implements CommandLineRunner {
             log.info("Seeded Demo Tenant B (PRO): admin@acme-robotics.dev / Password123!");
 
             seedAcmeCatalog(acme.tenantId());
+        } else {
+            tenantRepository.findBySlug("acme-robotics").ifPresent(t -> ensureBusinessSampleItems(t.getId()));
         }
 
         if (!tenantRepository.existsBySlug("nordic-labs")) {
-            authService.registerTenant(new AuthService.RegisterTenantCommand(
+            AuthService.AuthTokensResponse nordic = authService.registerTenant(new AuthService.RegisterTenantCommand(
                     "Nordic Sensor Labs",
                     "nordic-labs",
                     "admin@nordic-labs.dev",
@@ -72,7 +83,115 @@ public class DevDataSeeder implements CommandLineRunner {
                     "STARTER"
             ), true);
             log.info("Seeded Demo Tenant A (STARTER): admin@nordic-labs.dev / Password123!");
+            ensureBusinessSampleItems(nordic.tenantId());
+        } else {
+            tenantRepository.findBySlug("nordic-labs").ifPresent(t -> ensureBusinessSampleItems(t.getId()));
         }
+    }
+
+    private void ensureBusinessSampleItems(UUID tenantId) {
+        TenantContext.runAs(tenantId, () -> {
+            var existingCats = categoryService.listCategories();
+            boolean hasPosCategory = existingCats.stream().anyMatch(c -> "POS & Hardware".equalsIgnoreCase(c.name()));
+            if (hasPosCategory) {
+                return;
+            }
+
+            var mainWarehouse = stockLocationService.listLocations().stream()
+                    .filter(l -> !l.structural())
+                    .findFirst()
+                    .orElseGet(() -> stockLocationService.createLocation(new StockLocationService.CreateLocationCommand(
+                            "Main Storefront & Warehouse",
+                            "Primary stockroom and retail shelf storage",
+                            null,
+                            "WAREHOUSE",
+                            false,
+                            false,
+                            "LOC-MAIN-01"
+                    )));
+
+            var posCat = categoryService.createCategory(new PartCategoryService.CreateCategoryCommand(
+                    "POS & Hardware", "Point of sale terminals, scanners, and printers", null, false, mainWarehouse.id(), "box"
+            ));
+            var scannersCat = categoryService.createCategory(new PartCategoryService.CreateCategoryCommand(
+                    "Barcode Scanners", "Handheld 1D/2D and desktop barcode scanners", posCat.id(), false, mainWarehouse.id(), "qr-code"
+            ));
+            var printersCat = categoryService.createCategory(new PartCategoryService.CreateCategoryCommand(
+                    "Receipt & Label Printers", "Thermal receipt and shipping label printers", posCat.id(), false, mainWarehouse.id(), "printer"
+            ));
+            var suppliesCat = categoryService.createCategory(new PartCategoryService.CreateCategoryCommand(
+                    "Packaging & Supplies", "Boxes, thermal paper rolls, and shipping labels", null, false, mainWarehouse.id(), "package"
+            ));
+            var labelsCat = categoryService.createCategory(new PartCategoryService.CreateCategoryCommand(
+                    "Thermal Rolls & Labels", "Direct thermal and thermal transfer consumables", suppliesCat.id(), false, mainWarehouse.id(), "tag"
+            ));
+
+            var scanner1 = partService.createPart(new PartService.CreatePartCommand(
+                    "SCN-2D-PRO",
+                    "Wireless 2D QR & Barcode Scanner",
+                    "Bluetooth & 2.4GHz USB cordless handheld scanner with charging cradle",
+                    scannersCat.id(),
+                    "A", null, null, "pcs", new BigDecimal("15"),
+                    true, false, false, true, true, true, true, false,
+                    Map.of(), List.of()
+            ));
+            stockService.createStock(new StockService.CreateStockCommand(
+                    scanner1.id(), mainWarehouse.id(), new BigDecimal("42"),
+                    null, "BATCH-2026-10", "OK", null, new BigDecimal("68.00"), "USD", "Retail Box", false, null, "Initial stock seed"
+            ));
+
+            var printer1 = partService.createPart(new PartService.CreatePartCommand(
+                    "PRT-THERM-80",
+                    "80mm Thermal Receipt Printer (USB/LAN)",
+                    "High-speed 250mm/s auto-cutter POS receipt printer",
+                    printersCat.id(),
+                    "A", null, null, "pcs", new BigDecimal("10"),
+                    true, false, false, true, true, true, true, false,
+                    Map.of(), List.of()
+            ));
+            stockService.createStock(new StockService.CreateStockCommand(
+                    printer1.id(), mainWarehouse.id(), new BigDecimal("6"),
+                    null, "BATCH-2026-11", "OK", null, new BigDecimal("115.00"), "USD", "Box", false, null, "Low stock seed"
+            ));
+
+            var paperRoll = partService.createPart(new PartService.CreatePartCommand(
+                    "SUP-ROLL-80X80",
+                    "Thermal Receipt Paper Rolls 80x80mm (Box of 50)",
+                    "BPA-free high sensitivity thermal paper rolls",
+                    labelsCat.id(),
+                    "A", null, null, "box", new BigDecimal("20"),
+                    true, false, false, true, false, true, true, false,
+                    Map.of(), List.of()
+            ));
+            stockService.createStock(new StockService.CreateStockCommand(
+                    paperRoll.id(), mainWarehouse.id(), new BigDecimal("85"),
+                    null, "LOT-PAPER-01", "OK", null, new BigDecimal("34.50"), "USD", "Carton", false, null, "Initial stock seed"
+            ));
+
+            var shippingLabels = partService.createPart(new PartService.CreatePartCommand(
+                    "SUP-LBL-4X6",
+                    "4x6 Direct Thermal Shipping Labels (Roll of 500)",
+                    "Perforated self-adhesive fanfold/roll labels for courier waybills",
+                    labelsCat.id(),
+                    "A", null, null, "roll", new BigDecimal("30"),
+                    true, false, false, true, false, true, true, false,
+                    Map.of(), List.of()
+            ));
+            stockService.createStock(new StockService.CreateStockCommand(
+                    shippingLabels.id(), mainWarehouse.id(), new BigDecimal("18"),
+                    null, "LOT-LBL-09", "OK", null, new BigDecimal("9.20"), "USD", "Roll", false, null, "Below min stock seed"
+            ));
+
+            partService.createPart(new PartService.CreatePartCommand(
+                    "POS-DRAWER-16",
+                    "Heavy-Duty 16\" Cash Drawer (RJ11)",
+                    "5-bill / 8-coin removable tray steel cash register drawer",
+                    posCat.id(),
+                    "A", null, null, "pcs", new BigDecimal("8"),
+                    true, false, false, true, false, true, true, false,
+                    Map.of(), List.of()
+            ));
+        });
     }
 
     private void seedAcmeCatalog(java.util.UUID tenantId) {

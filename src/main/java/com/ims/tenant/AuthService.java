@@ -266,7 +266,6 @@ public class AuthService {
         return issueTokensForUser(user, tenant);
     }
 
-    @Transactional
     public AuthTokensResponse refresh(String rawRefreshToken) {
         if (rawRefreshToken == null || rawRefreshToken.isBlank()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh token is required.");
@@ -319,7 +318,6 @@ public class AuthService {
         });
     }
 
-    @Transactional
     public AuthTokensResponse acceptInvite(String inviteToken, String fullName, String password) {
         UserAccount user = userAccountRepository.findByInviteToken(inviteToken)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invalid or expired invitation token."));
@@ -375,8 +373,11 @@ public class AuthService {
     }
 
     public Set<String> resolveEffectivePermissions(UUID tenantId, UUID userId) {
+        TransactionTemplate newTx = new TransactionTemplate(transactionTemplate.getTransactionManager());
+        newTx.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        newTx.setReadOnly(true);
         return TenantContext.callUncheckedAs(tenantId, () ->
-                transactionTemplate.execute(status -> {
+                newTx.execute(status -> {
                     List<UserRoleAssignment> assignments = userRoleAssignmentRepository.findByUserId(userId);
                     Set<String> perms = new LinkedHashSet<>();
                     for (UserRoleAssignment a : assignments) {
