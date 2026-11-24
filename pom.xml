@@ -23,6 +23,7 @@
         <jjwt.version>0.12.6</jjwt.version>
         <fastexcel.version>0.18.4</fastexcel.version>
         <aws.sdk.version>2.29.45</aws.sdk.version>
+        <testcontainers.version>1.21.4</testcontainers.version>
     </properties>
 
     <dependencies>
