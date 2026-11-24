@@ -19,6 +19,7 @@ import com.ims.config.tenant.TenantContext;
 import com.ims.part.PartService;
 import com.ims.stock.StockLocationService;
 import com.ims.stock.StockService;
+import com.ims.tenant.AuthService;
 import com.ims.tenant.Tenant;
 import com.ims.tenant.TenantRepository;
 import com.ims.tenant.UserAccount;
@@ -87,6 +88,7 @@ public class PlatformService implements ApplicationRunner {
     private final StockService stockService;
     private final JwtTokenService jwtTokenService;
     private final PasswordEncoder passwordEncoder;
+    private final AuthService authService;
 
     public PlatformService(
             PlatformUserRepository platformUserRepository,
@@ -106,7 +108,8 @@ public class PlatformService implements ApplicationRunner {
             StockLocationService locationService,
             StockService stockService,
             JwtTokenService jwtTokenService,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            AuthService authService
     ) {
         this.platformUserRepository = platformUserRepository;
         this.usageSnapshotRepository = usageSnapshotRepository;
@@ -126,6 +129,7 @@ public class PlatformService implements ApplicationRunner {
         this.stockService = stockService;
         this.jwtTokenService = jwtTokenService;
         this.passwordEncoder = passwordEncoder;
+        this.authService = authService;
     }
 
     @Override
@@ -172,6 +176,24 @@ public class PlatformService implements ApplicationRunner {
                     t.getCreatedAt()
             );
         }).toList();
+    }
+
+    public TenantSummaryView createTenant(
+            JwtTokenService.PlatformUserPrincipal actor,
+            AuthService.RegisterTenantCommand cmd
+    ) {
+        AuthService.AuthTokensResponse tokens = authService.registerTenant(cmd, true);
+        recordPlatformAudit(
+                actor,
+                "TENANT_CREATED",
+                "Tenant",
+                tokens.tenantId(),
+                Map.of("slug", tokens.tenantSlug(), "adminEmail", tokens.email())
+        );
+        return listTenants().stream()
+                .filter(t -> t.id().equals(tokens.tenantId()))
+                .findFirst()
+                .orElseThrow();
     }
 
     @Transactional

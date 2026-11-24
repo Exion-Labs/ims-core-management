@@ -2,6 +2,11 @@ package com.ims.platform;
 
 import com.ims.common.outbox.OutboxEvent;
 import com.ims.config.security.JwtTokenService;
+import com.ims.tenant.AuthService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,6 +32,16 @@ public class PlatformController {
     public record FeatureOverridePayload(Boolean enabled, Long limitValue, String reason) {}
     public record PlanFeaturePayload(boolean enabled, Long limitValue) {}
     public record SupportSessionPayload(String reason) {}
+    public record CreateTenantPayload(
+            @NotBlank String tenantName,
+            @NotBlank String tenantSlug,
+            @NotBlank @Email String adminEmail,
+            @NotBlank String adminFullName,
+            @NotBlank @Size(min = 8) String adminPassword,
+            String baseCurrency,
+            String timezone,
+            String planCode
+    ) {}
 
     private final PlatformService platformService;
 
@@ -42,6 +57,27 @@ public class PlatformController {
     @GetMapping("/tenants")
     public List<PlatformService.TenantSummaryView> listTenants() {
         return platformService.listTenants();
+    }
+
+    @PostMapping("/tenants")
+    @ResponseStatus(HttpStatus.CREATED)
+    public PlatformService.TenantSummaryView createTenant(
+            Authentication auth,
+            @Valid @RequestBody CreateTenantPayload payload
+    ) {
+        return platformService.createTenant(
+                principal(auth),
+                new AuthService.RegisterTenantCommand(
+                        payload.tenantName(),
+                        payload.tenantSlug(),
+                        payload.adminEmail(),
+                        payload.adminFullName(),
+                        payload.adminPassword(),
+                        payload.baseCurrency(),
+                        payload.timezone(),
+                        payload.planCode() != null && !payload.planCode().isBlank() ? payload.planCode() : "TRIAL"
+                )
+        );
     }
 
     @PatchMapping("/tenants/{tenantId}/status")

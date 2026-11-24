@@ -35,7 +35,7 @@ management:
 
 ims:
   signup:
-    enabled: ${IMS_SIGNUP_ENABLED:true}
+    enabled: ${IMS_SIGNUP_ENABLED:false}
   outbox:
     poll-interval-ms: 2000
   security:
