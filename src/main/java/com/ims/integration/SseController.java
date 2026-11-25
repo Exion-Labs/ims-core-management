@@ -1,7 +1,7 @@
 package com.ims.integration;
 
-import com.ims.common.entitlement.Feature;
-import com.ims.common.entitlement.RequiresFeature;
+import com.ims.entitlement.spi.Feature;
+import com.ims.entitlement.spi.RequiresFeature;
 import com.ims.config.security.TenantUserPrincipal;
 import com.ims.config.tenant.TenantContext;
 import org.springframework.http.MediaType;

@@ -1,7 +1,7 @@
 package com.ims.integration;
 
-import com.ims.common.entitlement.EntitlementService;
-import com.ims.common.entitlement.Feature;
+import com.ims.entitlement.spi.EntitlementFacade;
+import com.ims.entitlement.spi.Feature;
 import com.ims.common.outbox.OutboxEvent;
 import com.ims.common.outbox.OutboxEventHandler;
 import com.ims.config.security.SseTicketTenantLookup;
@@ -25,10 +25,10 @@ public class SseService implements OutboxEventHandler, SseTicketTenantLookup {
 
     private final Map<String, TicketInfo> tickets = new ConcurrentHashMap<>();
     private final Map<UUID, List<SseEmitter>> emittersByTenant = new ConcurrentHashMap<>();
-    private final EntitlementService entitlementService;
+    private final EntitlementFacade EntitlementFacade;
 
-    public SseService(EntitlementService entitlementService) {
-        this.entitlementService = entitlementService;
+    public SseService(EntitlementFacade EntitlementFacade) {
+        this.EntitlementFacade = EntitlementFacade;
     }
 
     public String issueTicket(UUID tenantId, UUID userId) {
@@ -80,7 +80,7 @@ public class SseService implements OutboxEventHandler, SseTicketTenantLookup {
 
     @Override
     public void handle(OutboxEvent event) {
-        if (!entitlementService.getEffectiveForTenant(event.getTenantId()).isEnabled(Feature.REALTIME)) {
+        if (!EntitlementFacade.getEffectiveForTenant(event.getTenantId()).isEnabled(Feature.REALTIME)) {
             return;
         }
         List<SseEmitter> list = emittersByTenant.get(event.getTenantId());

@@ -2,9 +2,9 @@ package com.ims;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ims.company.CurrencyService;
+import com.ims.partner.application.CurrencyService;
 import com.ims.config.security.TenantAuthAndContextFilter;
-import com.ims.tenant.AuthService;
+import com.ims.identity.spi.TenantProvisioningPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -53,7 +53,7 @@ class CompanyCatalogIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private AuthService authService;
+    private TenantProvisioningPort TenantProvisioningPort;
 
     @Autowired
     private CurrencyService currencyService;
@@ -61,13 +61,13 @@ class CompanyCatalogIntegrationTest {
     @Value("${ims.security.proxy-secret}")
     private String proxySecret;
 
-    private AuthService.AuthTokensResponse tenantUsd;
+    private TenantProvisioningPort.AuthTokensResponse tenantUsd;
 
     @BeforeEach
     void setUp() {
         currencyService.ensureDefaultRatesSeeded();
         String suffix = UUID.randomUUID().toString().substring(0, 8);
-        tenantUsd = authService.registerTenant(new AuthService.RegisterTenantCommand(
+        tenantUsd = TenantProvisioningPort.registerTenant(new TenantProvisioningPort.ProvisionTenantCommand(
                 "Global Sourcing Corp " + suffix,
                 "sourcing-" + suffix,
                 "sourcing-" + suffix + "@example.com",

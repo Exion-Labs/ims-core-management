@@ -1,7 +1,13 @@
 package com.ims.config;
 
-import com.ims.common.entitlement.FeatureNotEnabledException;
-import com.ims.common.entitlement.LimitReachedException;
+import com.ims.entitlement.spi.FeatureNotEnabledException;
+import com.ims.entitlement.spi.LimitReachedException;
+import com.ims.shared.exception.BusinessRuleException;
+import com.ims.shared.exception.ConflictException;
+import com.ims.shared.exception.ForbiddenException;
+import com.ims.shared.exception.ResourceNotFoundException;
+import com.ims.shared.exception.UnauthorizedException;
+import com.ims.shared.exception.ValidationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -16,6 +22,36 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleNotFound(ResourceNotFoundException ex) {
+        return errorBody(HttpStatus.NOT_FOUND, ex.getCode(), ex.getMessage());
+    }
+
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<Map<String, Object>> handleConflict(ConflictException ex) {
+        return errorBody(HttpStatus.CONFLICT, ex.getCode(), ex.getMessage());
+    }
+
+    @ExceptionHandler(BusinessRuleException.class)
+    public ResponseEntity<Map<String, Object>> handleBusinessRule(BusinessRuleException ex) {
+        return errorBody(HttpStatus.UNPROCESSABLE_ENTITY, ex.getCode(), ex.getMessage());
+    }
+
+    @ExceptionHandler(ValidationException.class)
+    public ResponseEntity<Map<String, Object>> handleValidationException(ValidationException ex) {
+        return errorBody(HttpStatus.BAD_REQUEST, ex.getCode(), ex.getMessage());
+    }
+
+    @ExceptionHandler(UnauthorizedException.class)
+    public ResponseEntity<Map<String, Object>> handleUnauthorized(UnauthorizedException ex) {
+        return errorBody(HttpStatus.UNAUTHORIZED, ex.getCode(), ex.getMessage());
+    }
+
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<Map<String, Object>> handleForbidden(ForbiddenException ex) {
+        return errorBody(HttpStatus.FORBIDDEN, ex.getCode(), ex.getMessage());
+    }
 
     @ExceptionHandler(FeatureNotEnabledException.class)
     public ResponseEntity<Map<String, Object>> handleFeatureNotEnabled(FeatureNotEnabledException ex) {
@@ -41,21 +77,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Map<String, Object>> handleAccessDenied(AccessDeniedException ex) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of(
-                "code", "FORBIDDEN",
-                "message", "Insufficient permissions",
-                "timestamp", Instant.now().toString()
-        ));
+        return errorBody(HttpStatus.FORBIDDEN, "FORBIDDEN", "Insufficient permissions");
     }
 
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Map<String, Object>> handleResponseStatus(ResponseStatusException ex) {
         HttpStatus status = HttpStatus.valueOf(ex.getStatusCode().value());
-        return ResponseEntity.status(status).body(Map.of(
-                "code", status.name(),
-                "message", ex.getReason() != null ? ex.getReason() : status.getReasonPhrase(),
-                "timestamp", Instant.now().toString()
-        ));
+        return errorBody(status, status.name(), ex.getReason() != null ? ex.getReason() : status.getReasonPhrase());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -66,6 +94,14 @@ public class GlobalExceptionHandler {
                 "code", "VALIDATION_ERROR",
                 "message", "Request validation failed",
                 "fields", fieldErrors,
+                "timestamp", Instant.now().toString()
+        ));
+    }
+
+    private ResponseEntity<Map<String, Object>> errorBody(HttpStatus status, String code, String message) {
+        return ResponseEntity.status(status).body(Map.of(
+                "code", code,
+                "message", message != null ? message : status.getReasonPhrase(),
                 "timestamp", Instant.now().toString()
         ));
     }

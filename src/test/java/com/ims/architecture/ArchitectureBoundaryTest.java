@@ -1,7 +1,7 @@
 package com.ims.architecture;
 
 import com.ims.common.audit.AuditEventRepository;
-import com.ims.common.entitlement.RequiresFeature;
+import com.ims.entitlement.spi.RequiresFeature;
 import com.ims.common.events.DomainEvent;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
@@ -47,11 +47,11 @@ class ArchitectureBoundaryTest {
         noClasses()
                 .that().resideInAnyPackage(
                         "com.ims.tenant..",
-                        "com.ims.part..",
+                        "com.ims.catalog..",
                         "com.ims.stock..",
-                        "com.ims.company..",
-                        "com.ims.build..",
-                        "com.ims.order..",
+                        "com.ims.partner..",
+                        "com.ims.manufacturing..",
+                        "com.ims.purchasing..", "com.ims.fulfillment..",
                         "com.ims.integration.."
                 )
                 .should().dependOnClassesThat().resideInAPackage("com.ims.platform..")
@@ -100,11 +100,11 @@ class ArchitectureBoundaryTest {
         classes()
                 .that().areAnnotatedWith(RestController.class)
                 .and().resideInAnyPackage(
-                        "com.ims.part..",
+                        "com.ims.catalog..",
                         "com.ims.stock..",
-                        "com.ims.company..",
-                        "com.ims.build..",
-                        "com.ims.order..",
+                        "com.ims.partner..",
+                        "com.ims.manufacturing..",
+                        "com.ims.purchasing..", "com.ims.fulfillment..",
                         "com.ims.integration.."
                 )
                 .should().beAnnotatedWith(RequiresFeature.class)
@@ -115,9 +115,9 @@ class ArchitectureBoundaryTest {
     @Test
     void partRepositoriesMustOnlyBeAccessedWithinPartPackage() {
         classes()
-                .that().resideInAPackage("com.ims.part..")
+                .that().resideInAPackage("com.ims.catalog..")
                 .and().haveSimpleNameEndingWith("Repository")
-                .should().onlyBeAccessed().byAnyPackage("com.ims.part..")
+                .should().onlyBeAccessed().byAnyPackage("com.ims.catalog..")
                 .allowEmptyShould(true)
                 .check(classes);
     }
@@ -135,19 +135,29 @@ class ArchitectureBoundaryTest {
     @Test
     void companyRepositoriesMustOnlyBeAccessedWithinCompanyPackage() {
         classes()
-                .that().resideInAPackage("com.ims.company..")
+                .that().resideInAPackage("com.ims.partner..")
                 .and().haveSimpleNameEndingWith("Repository")
-                .should().onlyBeAccessed().byAnyPackage("com.ims.company..")
+                .should().onlyBeAccessed().byAnyPackage("com.ims.partner..")
                 .allowEmptyShould(true)
                 .check(classes);
     }
 
     @Test
-    void orderRepositoriesMustOnlyBeAccessedWithinOrderPackage() {
+    void purchasingRepositoriesMustOnlyBeAccessedWithinPurchasingPackage() {
         classes()
-                .that().resideInAPackage("com.ims.order..")
+                .that().resideInAPackage("com.ims.purchasing..")
                 .and().haveSimpleNameEndingWith("Repository")
-                .should().onlyBeAccessed().byAnyPackage("com.ims.order..")
+                .should().onlyBeAccessed().byAnyPackage("com.ims.purchasing..")
+                .allowEmptyShould(true)
+                .check(classes);
+    }
+
+    @Test
+    void fulfillmentRepositoriesMustOnlyBeAccessedWithinFulfillmentPackage() {
+        classes()
+                .that().resideInAPackage("com.ims.fulfillment..")
+                .and().haveSimpleNameEndingWith("Repository")
+                .should().onlyBeAccessed().byAnyPackage("com.ims.fulfillment..")
                 .allowEmptyShould(true)
                 .check(classes);
     }
@@ -155,9 +165,9 @@ class ArchitectureBoundaryTest {
     @Test
     void buildRepositoriesMustOnlyBeAccessedWithinBuildPackage() {
         classes()
-                .that().resideInAPackage("com.ims.build..")
+                .that().resideInAPackage("com.ims.manufacturing..")
                 .and().haveSimpleNameEndingWith("Repository")
-                .should().onlyBeAccessed().byAnyPackage("com.ims.build..")
+                .should().onlyBeAccessed().byAnyPackage("com.ims.manufacturing..")
                 .allowEmptyShould(true)
                 .check(classes);
     }

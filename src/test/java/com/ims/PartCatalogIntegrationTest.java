@@ -5,11 +5,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ims.config.security.TenantAuthAndContextFilter;
 import com.ims.config.tenant.TenantContext;
 import com.ims.config.tenant.TenantPredicateInspector;
-import com.ims.part.ParameterTemplate;
-import com.ims.part.PartParameter;
-import com.ims.part.PartParameterRepository;
-import com.ims.part.PartService;
-import com.ims.tenant.AuthService;
+import com.ims.catalog.domain.model.ParameterTemplate;
+import com.ims.catalog.domain.model.PartParameter;
+import com.ims.catalog.infrastructure.persistence.PartParameterRepository;
+import com.ims.catalog.application.PartService;
+import com.ims.identity.spi.TenantProvisioningPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -71,7 +71,7 @@ class PartCatalogIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private AuthService authService;
+    private TenantProvisioningPort TenantProvisioningPort;
 
     @Autowired
     private PartService partService;
@@ -88,13 +88,13 @@ class PartCatalogIntegrationTest {
     @Value("${ims.security.proxy-secret}")
     private String proxySecret;
 
-    private AuthService.AuthTokensResponse tenantA;
-    private AuthService.AuthTokensResponse tenantB;
+    private TenantProvisioningPort.AuthTokensResponse tenantA;
+    private TenantProvisioningPort.AuthTokensResponse tenantB;
 
     @BeforeEach
     void setUp() {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
-        tenantA = authService.registerTenant(new AuthService.RegisterTenantCommand(
+        tenantA = TenantProvisioningPort.registerTenant(new TenantProvisioningPort.ProvisionTenantCommand(
                 "Alpha Electronics " + suffix,
                 "alpha-elec-" + suffix,
                 "alpha-" + suffix + "@example.com",
@@ -105,7 +105,7 @@ class PartCatalogIntegrationTest {
                 "PRO"
         ), true);
 
-        tenantB = authService.registerTenant(new AuthService.RegisterTenantCommand(
+        tenantB = TenantProvisioningPort.registerTenant(new TenantProvisioningPort.ProvisionTenantCommand(
                 "Beta Hardware " + suffix,
                 "beta-hw-" + suffix,
                 "beta-" + suffix + "@example.com",
@@ -354,7 +354,7 @@ class PartCatalogIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
-    private UUID createCategory(AuthService.AuthTokensResponse tenant, String name, UUID parentId, boolean structural) throws Exception {
+    private UUID createCategory(TenantProvisioningPort.AuthTokensResponse tenant, String name, UUID parentId, boolean structural) throws Exception {
         Map<String, Object> body = parentId != null
                 ? Map.of("name", name, "parentId", parentId, "structural", structural)
                 : Map.of("name", name, "structural", structural);
@@ -369,7 +369,7 @@ class PartCatalogIntegrationTest {
     }
 
     private UUID createPart(
-            AuthService.AuthTokensResponse tenant,
+            TenantProvisioningPort.AuthTokensResponse tenant,
             String ipn,
             String name,
             UUID categoryId,

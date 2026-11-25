@@ -4,9 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ims.config.security.TenantAuthAndContextFilter;
 import com.ims.config.tenant.TenantContext;
-import com.ims.stock.StockReconciliationJob;
-import com.ims.stock.StockService;
-import com.ims.tenant.AuthService;
+import com.ims.stock.application.StockReconciliationJob;
+import com.ims.stock.application.StockService;
+import com.ims.identity.spi.TenantProvisioningPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -62,7 +62,7 @@ class StockEngineIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private AuthService authService;
+    private TenantProvisioningPort TenantProvisioningPort;
 
     @Autowired
     private StockService stockService;
@@ -73,13 +73,13 @@ class StockEngineIntegrationTest {
     @Value("${ims.security.proxy-secret}")
     private String proxySecret;
 
-    private AuthService.AuthTokensResponse tenantA;
-    private AuthService.AuthTokensResponse tenantB;
+    private TenantProvisioningPort.AuthTokensResponse tenantA;
+    private TenantProvisioningPort.AuthTokensResponse tenantB;
 
     @BeforeEach
     void setUp() {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
-        tenantA = authService.registerTenant(new AuthService.RegisterTenantCommand(
+        tenantA = TenantProvisioningPort.registerTenant(new TenantProvisioningPort.ProvisionTenantCommand(
                 "Warehouse Alpha " + suffix,
                 "wh-alpha-" + suffix,
                 "wh-a-" + suffix + "@example.com",
@@ -90,7 +90,7 @@ class StockEngineIntegrationTest {
                 "ENTERPRISE"
         ), true);
 
-        tenantB = authService.registerTenant(new AuthService.RegisterTenantCommand(
+        tenantB = TenantProvisioningPort.registerTenant(new TenantProvisioningPort.ProvisionTenantCommand(
                 "Warehouse Beta " + suffix,
                 "wh-beta-" + suffix,
                 "wh-b-" + suffix + "@example.com",
@@ -341,7 +341,7 @@ class StockEngineIntegrationTest {
     }
 
     private UUID createLocation(
-            AuthService.AuthTokensResponse tenant,
+            TenantProvisioningPort.AuthTokensResponse tenant,
             String name,
             UUID parentId,
             String locationType,
@@ -365,7 +365,7 @@ class StockEngineIntegrationTest {
         return UUID.fromString(objectMapper.readTree(res.getResponse().getContentAsString()).get("id").asText());
     }
 
-    private UUID createPart(AuthService.AuthTokensResponse tenant, String ipn, String name, boolean trackable) throws Exception {
+    private UUID createPart(TenantProvisioningPort.AuthTokensResponse tenant, String ipn, String name, boolean trackable) throws Exception {
         MvcResult res = mockMvc.perform(post("/api/v1/parts")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + tenant.accessToken())
                         .header(TenantAuthAndContextFilter.PROXY_SECRET_HEADER, proxySecret)

@@ -1,29 +1,16 @@
 package com.ims.platform;
 
+import com.ims.catalog.spi.CatalogReadPort;
 import com.ims.common.audit.AuditContext;
 import com.ims.common.audit.AuditService;
-import com.ims.common.entitlement.EntitlementService;
-import com.ims.common.entitlement.Feature;
-import com.ims.common.entitlement.Plan;
-import com.ims.common.entitlement.PlanFeature;
-import com.ims.common.entitlement.PlanFeatureRepository;
-import com.ims.common.entitlement.PlanRepository;
-import com.ims.common.entitlement.TenantFeatureOverride;
-import com.ims.common.entitlement.TenantFeatureOverrideRepository;
-import com.ims.common.entitlement.TenantSubscription;
-import com.ims.common.entitlement.TenantSubscriptionRepository;
+import com.ims.entitlement.spi.EntitlementAdminPort;
 import com.ims.common.outbox.OutboxEvent;
 import com.ims.common.outbox.OutboxEventRepository;
 import com.ims.config.security.JwtTokenService;
 import com.ims.config.tenant.TenantContext;
-import com.ims.part.PartService;
-import com.ims.stock.StockLocationService;
-import com.ims.stock.StockService;
-import com.ims.tenant.AuthService;
-import com.ims.tenant.Tenant;
-import com.ims.tenant.TenantRepository;
-import com.ims.tenant.UserAccount;
-import com.ims.tenant.UserAccountRepository;
+import com.ims.identity.spi.TenantProvisioningPort;
+import com.ims.identity.spi.TenantReadPort;
+import com.ims.stock.spi.StockReadPort;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.data.domain.PageRequest;
@@ -74,62 +61,44 @@ public class PlatformService implements ApplicationRunner {
     private final TenantUsageSnapshotRepository usageSnapshotRepository;
     private final SupportSessionRepository supportSessionRepository;
     private final PlatformAuditLogRepository platformAuditLogRepository;
-    private final TenantRepository tenantRepository;
-    private final UserAccountRepository userAccountRepository;
-    private final PlanRepository planRepository;
-    private final PlanFeatureRepository planFeatureRepository;
-    private final TenantSubscriptionRepository subscriptionRepository;
-    private final TenantFeatureOverrideRepository overrideRepository;
+    private final TenantReadPort tenantReadPort;
+    private final EntitlementAdminPort entitlementAdminPort;
     private final OutboxEventRepository outboxEventRepository;
-    private final EntitlementService entitlementService;
     private final AuditService auditService;
-    private final PartService partService;
-    private final StockLocationService locationService;
-    private final StockService stockService;
+    private final CatalogReadPort catalogReadPort;
+    private final StockReadPort stockReadPort;
     private final JwtTokenService jwtTokenService;
     private final PasswordEncoder passwordEncoder;
-    private final AuthService authService;
+    private final TenantProvisioningPort tenantProvisioningPort;
 
     public PlatformService(
             PlatformUserRepository platformUserRepository,
             TenantUsageSnapshotRepository usageSnapshotRepository,
             SupportSessionRepository supportSessionRepository,
             PlatformAuditLogRepository platformAuditLogRepository,
-            TenantRepository tenantRepository,
-            UserAccountRepository userAccountRepository,
-            PlanRepository planRepository,
-            PlanFeatureRepository planFeatureRepository,
-            TenantSubscriptionRepository subscriptionRepository,
-            TenantFeatureOverrideRepository overrideRepository,
+            TenantReadPort tenantReadPort,
+            EntitlementAdminPort entitlementAdminPort,
             OutboxEventRepository outboxEventRepository,
-            EntitlementService entitlementService,
             AuditService auditService,
-            PartService partService,
-            StockLocationService locationService,
-            StockService stockService,
+            CatalogReadPort catalogReadPort,
+            StockReadPort stockReadPort,
             JwtTokenService jwtTokenService,
             PasswordEncoder passwordEncoder,
-            AuthService authService
+            TenantProvisioningPort tenantProvisioningPort
     ) {
         this.platformUserRepository = platformUserRepository;
         this.usageSnapshotRepository = usageSnapshotRepository;
         this.supportSessionRepository = supportSessionRepository;
         this.platformAuditLogRepository = platformAuditLogRepository;
-        this.tenantRepository = tenantRepository;
-        this.userAccountRepository = userAccountRepository;
-        this.planRepository = planRepository;
-        this.planFeatureRepository = planFeatureRepository;
-        this.subscriptionRepository = subscriptionRepository;
-        this.overrideRepository = overrideRepository;
+        this.tenantReadPort = tenantReadPort;
+        this.entitlementAdminPort = entitlementAdminPort;
         this.outboxEventRepository = outboxEventRepository;
-        this.entitlementService = entitlementService;
         this.auditService = auditService;
-        this.partService = partService;
-        this.locationService = locationService;
-        this.stockService = stockService;
+        this.catalogReadPort = catalogReadPort;
+        this.stockReadPort = stockReadPort;
         this.jwtTokenService = jwtTokenService;
         this.passwordEncoder = passwordEncoder;
-        this.authService = authService;
+        this.tenantProvisioningPort = tenantProvisioningPort;
     }
 
     @Override
@@ -160,29 +129,33 @@ public class PlatformService implements ApplicationRunner {
 
     @Transactional(readOnly = true)
     public List<TenantSummaryView> listTenants() {
-        return tenantRepository.findAll().stream().map(t -> {
-            var sub = subscriptionRepository.findByTenantId(t.getId()).orElse(null);
-            Plan plan = sub != null ? planRepository.findById(sub.getPlanId()).orElse(null) : null;
-            long userCount = userAccountRepository.findByTenantIdOrderByCreatedAtAsc(t.getId()).size();
+        List<TenantReadPort.TenantSummary> tenants = tenantReadPort.findAll();
+        List<UUID> ids = tenants.stream().map(TenantReadPort.TenantSummary::id).toList();
+        Map<UUID, EntitlementAdminPort.TenantPlanSummary> plans = entitlementAdminPort.getTenantPlanSummaries(ids);
+        Map<UUID, Long> userCounts = tenantReadPort.countUsersByTenantIds(ids);
+
+        return tenants.stream().map(t -> {
+            EntitlementAdminPort.TenantPlanSummary plan = plans.get(t.id());
+            long userCount = userCounts.getOrDefault(t.id(), 0L);
             return new TenantSummaryView(
-                    t.getId(),
-                    t.getName(),
-                    t.getSlug(),
-                    t.getStatus(),
-                    t.getBaseCurrency(),
-                    plan != null ? plan.getCode() : "NONE",
-                    plan != null ? plan.getName() : "None",
+                    t.id(),
+                    t.name(),
+                    t.slug(),
+                    t.status(),
+                    t.baseCurrency(),
+                    plan != null ? plan.planCode() : "NONE",
+                    plan != null ? plan.planName() : "None",
                     userCount,
-                    t.getCreatedAt()
+                    t.createdAt()
             );
         }).toList();
     }
 
     public TenantSummaryView createTenant(
             JwtTokenService.PlatformUserPrincipal actor,
-            AuthService.RegisterTenantCommand cmd
+            TenantProvisioningPort.ProvisionTenantCommand cmd
     ) {
-        AuthService.AuthTokensResponse tokens = authService.registerTenant(cmd, true);
+        TenantProvisioningPort.AuthTokensResponse tokens = tenantProvisioningPort.registerTenant(cmd, true);
         recordPlatformAudit(
                 actor,
                 "TENANT_CREATED",
@@ -198,33 +171,20 @@ public class PlatformService implements ApplicationRunner {
 
     @Transactional
     public TenantSummaryView updateTenantStatus(JwtTokenService.PlatformUserPrincipal actor, UUID tenantId, String status) {
-        Tenant tenant = tenantRepository.findById(tenantId)
+        TenantReadPort.TenantSummary existing = tenantReadPort.findById(tenantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
-        String targetStatus = status.trim().toUpperCase();
-        String prev = tenant.getStatus();
-        tenant.setStatus(targetStatus);
-        tenantRepository.saveAndFlush(tenant);
-        recordPlatformAudit(actor, "TENANT_STATUS_CHANGE", "Tenant", tenantId, Map.of("from", prev, "to", targetStatus));
+        String prev = existing.status();
+        TenantReadPort.TenantSummary updated = tenantReadPort.updateStatus(tenantId, status);
+        recordPlatformAudit(actor, "TENANT_STATUS_CHANGE", "Tenant", tenantId, Map.of("from", prev, "to", updated.status()));
         return listTenants().stream().filter(t -> t.id().equals(tenantId)).findFirst().orElseThrow();
     }
 
     @Transactional
     public TenantSummaryView changeTenantPlan(JwtTokenService.PlatformUserPrincipal actor, UUID tenantId, String planCode) {
-        tenantRepository.findById(tenantId)
+        tenantReadPort.findById(tenantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
-        Plan plan = planRepository.findByCode(planCode.trim().toUpperCase())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Plan not found: " + planCode));
-        TenantSubscription sub = subscriptionRepository.findByTenantId(tenantId)
-                .orElseGet(() -> {
-                    TenantSubscription s = new TenantSubscription();
-                    s.setTenantId(tenantId);
-                    return s;
-                });
-        sub.setPlanId(plan.getId());
-        sub.setStatus("ACTIVE");
-        subscriptionRepository.saveAndFlush(sub);
-        entitlementService.evictCache(tenantId);
-        recordPlatformAudit(actor, "TENANT_PLAN_CHANGE", "Tenant", tenantId, Map.of("planCode", plan.getCode()));
+        entitlementAdminPort.changeTenantPlan(tenantId, planCode);
+        recordPlatformAudit(actor, "TENANT_PLAN_CHANGE", "Tenant", tenantId, Map.of("planCode", planCode.trim().toUpperCase()));
         return listTenants().stream().filter(t -> t.id().equals(tenantId)).findFirst().orElseThrow();
     }
 
@@ -237,109 +197,46 @@ public class PlatformService implements ApplicationRunner {
             Long limitValue,
             String reason
     ) {
-        Feature feature = Feature.valueOf(featureKey.trim().toUpperCase());
-        TenantFeatureOverride ov = overrideRepository.findByTenantIdAndFeatureKey(tenantId, feature.name())
-                .orElseGet(() -> {
-                    TenantFeatureOverride o = new TenantFeatureOverride();
-                    o.setTenantId(tenantId);
-                    o.setFeatureKey(feature.name());
-                    return o;
-                });
-        ov.setEnabled(enabled);
-        ov.setLimitValue(limitValue);
-        ov.setReason(reason != null ? reason : "Platform override");
-        overrideRepository.saveAndFlush(ov);
-        entitlementService.evictCache(tenantId);
+        entitlementAdminPort.setFeatureOverride(tenantId, featureKey, enabled, limitValue, reason);
         recordPlatformAudit(actor, "TENANT_FEATURE_OVERRIDE", "Tenant", tenantId, Map.of(
-                "featureKey", feature.name(),
+                "featureKey", featureKey.trim().toUpperCase(),
                 "enabled", String.valueOf(enabled),
                 "limitValue", String.valueOf(limitValue)
         ));
     }
 
     @Transactional(readOnly = true)
-    public List<PlanView> listPlans() {
-        return planRepository.findAll().stream().map(p -> {
-            List<PlanFeatureView> feats = planFeatureRepository.findByPlanId(p.getId()).stream()
-                    .map(pf -> new PlanFeatureView(pf.getFeatureKey(), pf.isEnabled(), pf.getLimitValue()))
-                    .toList();
-            return new PlanView(p.getId(), p.getCode(), p.getName(), p.getDescription(), feats);
-        }).toList();
+    public List<EntitlementAdminPort.PlanView> listPlans() {
+        return entitlementAdminPort.listPlans();
     }
 
     @Transactional
-    public PlanView updatePlanFeature(
+    public EntitlementAdminPort.PlanView updatePlanFeature(
             JwtTokenService.PlatformUserPrincipal actor,
             UUID planId,
             String featureKey,
             boolean enabled,
             Long limitValue
     ) {
-        planRepository.findById(planId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Plan not found"));
-        Feature feature = Feature.valueOf(featureKey.trim().toUpperCase());
-
-        List<PlanFeature> existing = planFeatureRepository.findByPlanId(planId);
-        if (!enabled && feature.isCoreAlwaysOn()) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
-                    "Core feature " + feature.name() + " cannot be disabled");
-        }
-        if (enabled) {
-            for (Feature dep : feature.getDependencies()) {
-                boolean depEnabled = existing.stream()
-                        .anyMatch(pf -> pf.getFeatureKey().equals(dep.name()) && pf.isEnabled());
-                if (!depEnabled) {
-                    throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
-                            "Feature " + feature.name() + " requires " + dep.name() + " to be enabled on this plan");
-                }
-            }
-        } else {
-            for (PlanFeature pf : existing) {
-                if (!pf.isEnabled()) continue;
-                Feature other = Feature.valueOf(pf.getFeatureKey());
-                if (other.getDependencies().contains(feature)) {
-                    throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
-                            "Cannot disable " + feature.name() + " while dependent feature " + other.name() + " is enabled");
-                }
-            }
-        }
-
-        PlanFeature target = existing.stream()
-                .filter(pf -> pf.getFeatureKey().equals(feature.name()))
-                .findFirst()
-                .orElseGet(() -> {
-                    PlanFeature pf = new PlanFeature();
-                    pf.setPlanId(planId);
-                    pf.setFeatureKey(feature.name());
-                    return pf;
-                });
-        target.setEnabled(enabled);
-        target.setLimitValue(limitValue);
-        planFeatureRepository.saveAndFlush(target);
+        EntitlementAdminPort.PlanView updated = entitlementAdminPort.updatePlanFeature(planId, featureKey, enabled, limitValue);
         recordPlatformAudit(actor, "PLAN_FEATURE_UPDATE", "Plan", planId, Map.of(
-                "featureKey", feature.name(),
+                "featureKey", featureKey.trim().toUpperCase(),
                 "enabled", enabled
         ));
-        return listPlans().stream().filter(p -> p.id().equals(planId)).findFirst().orElseThrow();
+        return updated;
     }
 
     public TenantUsageSnapshot captureUsageSnapshot(JwtTokenService.PlatformUserPrincipal actor, UUID tenantId) {
-        tenantRepository.findById(tenantId)
+        tenantReadPort.findById(tenantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
         LocalDate today = LocalDate.now();
-        long usersCount = userAccountRepository.findByTenantIdOrderByCreatedAtAsc(tenantId).size();
+        long usersCount = tenantReadPort.countUsersForTenant(tenantId);
 
         long[] counts = new long[3];
         TenantContext.runAs(tenantId, () -> {
-            counts[0] = partService.searchParts(
-                    new PartService.PartSearchFilter(null, null, false, null, null, null, null, null, null, null, null, null, null, null, null, null),
-                    PageRequest.of(0, 1)
-            ).getTotalElements();
-            counts[1] = locationService.listLocations().size();
-            counts[2] = stockService.searchStockItems(
-                    new StockService.StockSearchFilter(null, null, false, null, null, null, null),
-                    PageRequest.of(0, 1)
-            ).getTotalElements();
+            counts[0] = catalogReadPort.countParts();
+            counts[1] = stockReadPort.countLocations();
+            counts[2] = stockReadPort.countStockItems();
         });
 
         TenantUsageSnapshot snap = usageSnapshotRepository.findByTenantIdAndSnapshotDate(tenantId, today)
@@ -371,11 +268,9 @@ public class PlatformService implements ApplicationRunner {
         if (reason == null || reason.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Support reason is required");
         }
-        Tenant tenant = tenantRepository.findById(tenantId)
+        TenantReadPort.TenantSummary tenant = tenantReadPort.findById(tenantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
-        UserAccount targetUser = userAccountRepository.findByTenantIdOrderByCreatedAtAsc(tenantId).stream()
-                .filter(u -> "ACTIVE".equals(u.getStatus()))
-                .findFirst()
+        TenantReadPort.ActiveUserSummary targetUser = tenantReadPort.findFirstActiveUser(tenantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Tenant has no active users"));
 
         SupportSession session = new SupportSession();
@@ -386,10 +281,10 @@ public class PlatformService implements ApplicationRunner {
         SupportSession saved = supportSessionRepository.saveAndFlush(session);
 
         String impersonationToken = jwtTokenService.createTenantAccessToken(
-                targetUser.getId(),
+                targetUser.id(),
                 tenantId,
-                targetUser.getEmail(),
-                targetUser.getFullName() + " [Support: " + actor.email() + "]",
+                targetUser.email(),
+                targetUser.fullName() + " [Support: " + actor.email() + "]",
                 Set.of("ADMIN:VIEW", "PART:VIEW", "STOCK:VIEW", "ORDER:VIEW", "BUILD:VIEW", "COMPANY:VIEW")
         );
 
@@ -412,7 +307,7 @@ public class PlatformService implements ApplicationRunner {
         });
 
         recordPlatformAudit(actor, "SUPPORT_SESSION_START", "Tenant", tenantId, Map.of("sessionId", saved.getId().toString(), "reason", reason.trim()));
-        return new SupportSessionResponse(saved.getId(), tenantId, tenant.getSlug(), impersonationToken, saved.getExpiresAt(), saved.getReason());
+        return new SupportSessionResponse(saved.getId(), tenantId, tenant.slug(), impersonationToken, saved.getExpiresAt(), saved.getReason());
     }
 
     @Transactional(readOnly = true)

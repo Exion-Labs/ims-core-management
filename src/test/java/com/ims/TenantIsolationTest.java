@@ -4,10 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ims.common.audit.AuditEvent;
 import com.ims.common.audit.AuditService;
-import com.ims.common.entitlement.EntitlementService;
-import com.ims.common.entitlement.Feature;
-import com.ims.common.entitlement.TenantFeatureOverride;
-import com.ims.common.entitlement.TenantFeatureOverrideRepository;
+import com.ims.entitlement.spi.EntitlementFacade;
+import com.ims.entitlement.spi.Feature;
+import com.ims.entitlement.domain.model.TenantFeatureOverride;
+import com.ims.entitlement.infrastructure.persistence.TenantFeatureOverrideRepository;
 import com.ims.common.outbox.OutboxDispatcher;
 import com.ims.common.outbox.OutboxEvent;
 import com.ims.common.outbox.OutboxEventHandler;
@@ -16,11 +16,11 @@ import com.ims.common.outbox.OutboxWriter;
 import com.ims.config.security.TenantAuthAndContextFilter;
 import com.ims.config.tenant.TenantContext;
 import com.ims.config.tenant.TenantPredicateInspector;
-import com.ims.tenant.AuthService;
-import com.ims.tenant.Role;
-import com.ims.tenant.RoleRepository;
-import com.ims.tenant.TenantSetting;
-import com.ims.tenant.TenantSettingRepository;
+import com.ims.identity.spi.TenantProvisioningPort;
+import com.ims.identity.domain.model.Role;
+import com.ims.identity.infrastructure.persistence.RoleRepository;
+import com.ims.identity.domain.model.TenantSetting;
+import com.ims.identity.infrastructure.persistence.TenantSettingRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -102,7 +102,7 @@ class TenantIsolationTest {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private AuthService authService;
+    private TenantProvisioningPort TenantProvisioningPort;
 
     @Autowired
     private RoleRepository roleRepository;
@@ -126,7 +126,7 @@ class TenantIsolationTest {
     private TenantFeatureOverrideRepository overrideRepository;
 
     @Autowired
-    private EntitlementService entitlementService;
+    private EntitlementFacade EntitlementFacade;
 
     @Autowired
     private TenantPredicateInspector predicateInspector;
@@ -137,13 +137,13 @@ class TenantIsolationTest {
     @Value("${ims.security.proxy-secret}")
     private String proxySecret;
 
-    private AuthService.AuthTokensResponse tenantA;
-    private AuthService.AuthTokensResponse tenantB;
+    private TenantProvisioningPort.AuthTokensResponse tenantA;
+    private TenantProvisioningPort.AuthTokensResponse tenantB;
 
     @BeforeEach
     void setUpTenants() {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
-        tenantA = authService.registerTenant(new AuthService.RegisterTenantCommand(
+        tenantA = TenantProvisioningPort.registerTenant(new TenantProvisioningPort.ProvisionTenantCommand(
                 "Tenant Alpha " + suffix,
                 "tenant-a-" + suffix,
                 "admin-a-" + suffix + "@example.com",
@@ -154,7 +154,7 @@ class TenantIsolationTest {
                 "STARTER"
         ), true);
 
-        tenantB = authService.registerTenant(new AuthService.RegisterTenantCommand(
+        tenantB = TenantProvisioningPort.registerTenant(new TenantProvisioningPort.ProvisionTenantCommand(
                 "Tenant Beta " + suffix,
                 "tenant-b-" + suffix,
                 "admin-b-" + suffix + "@example.com",
@@ -336,7 +336,7 @@ class TenantIsolationTest {
         override.setEnabled(false);
         override.setReason("Testing feature entitlement gate");
         overrideRepository.save(override);
-        entitlementService.evictCache(tenantA.tenantId());
+        EntitlementFacade.evictCache(tenantA.tenantId());
 
         // Tenant A gets 403 FEATURE_NOT_ENABLED on /api/v1/settings/api-tokens
         mockMvc.perform(get("/api/v1/settings/api-tokens")

@@ -2,15 +2,10 @@ package com.ims.config.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ims.common.audit.AuditContext;
-import com.ims.common.entitlement.EntitlementService;
-import com.ims.common.entitlement.Feature;
+import com.ims.entitlement.spi.EntitlementFacade;
+import com.ims.entitlement.spi.Feature;
 import com.ims.config.tenant.TenantContext;
-import com.ims.tenant.ApiToken;
-import com.ims.tenant.ApiTokenRepository;
-import com.ims.tenant.Tenant;
-import com.ims.tenant.TenantRepository;
-import com.ims.tenant.UserAccount;
-import com.ims.tenant.UserAccountRepository;
+import com.ims.identity.spi.TenantReadPort;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -55,10 +50,8 @@ public class TenantAuthAndContextFilter extends OncePerRequestFilter {
     private record RateWindow(long epochMinute, AtomicInteger count) {}
 
     private final JwtTokenService jwtTokenService;
-    private final ApiTokenRepository apiTokenRepository;
-    private final UserAccountRepository userAccountRepository;
-    private final TenantRepository tenantRepository;
-    private final EntitlementService entitlementService;
+    private final TenantReadPort tenantReadPort;
+    private final EntitlementFacade EntitlementFacade;
     private final ObjectMapper objectMapper;
     private final String expectedProxySecret;
     private final org.springframework.beans.factory.ObjectProvider<SseTicketTenantLookup> sseTicketLookup;
@@ -66,19 +59,15 @@ public class TenantAuthAndContextFilter extends OncePerRequestFilter {
 
     public TenantAuthAndContextFilter(
             JwtTokenService jwtTokenService,
-            ApiTokenRepository apiTokenRepository,
-            UserAccountRepository userAccountRepository,
-            TenantRepository tenantRepository,
-            EntitlementService entitlementService,
+            TenantReadPort tenantReadPort,
+            EntitlementFacade EntitlementFacade,
             ObjectMapper objectMapper,
             @Value("${ims.security.proxy-secret:ims-dev-bff-proxy-secret-2026}") String expectedProxySecret,
             org.springframework.beans.factory.ObjectProvider<SseTicketTenantLookup> sseTicketLookup
     ) {
         this.jwtTokenService = jwtTokenService;
-        this.apiTokenRepository = apiTokenRepository;
-        this.userAccountRepository = userAccountRepository;
-        this.tenantRepository = tenantRepository;
-        this.entitlementService = entitlementService;
+        this.tenantReadPort = tenantReadPort;
+        this.EntitlementFacade = EntitlementFacade;
         this.objectMapper = objectMapper;
         this.expectedProxySecret = expectedProxySecret;
         this.sseTicketLookup = sseTicketLookup;
@@ -141,7 +130,7 @@ public class TenantAuthAndContextFilter extends OncePerRequestFilter {
                 return;
             }
         } else {
-            // Session JWT from BFF — MUST carry matching X-Proxy-Secret
+            // Session JWT from BFF â€” MUST carry matching X-Proxy-Secret
             String providedSecret = request.getHeader(PROXY_SECRET_HEADER);
             if (!constantTimeEquals(expectedProxySecret, providedSecret)) {
                 writeError(response, HttpStatus.UNAUTHORIZED, "MISSING_OR_INVALID_PROXY_SECRET",
@@ -162,21 +151,21 @@ public class TenantAuthAndContextFilter extends OncePerRequestFilter {
         }
 
         // Gate on Tenant status (ACTIVE vs SUSPENDED / DELETED)
-        Optional<Tenant> tenantOpt = tenantRepository.findById(principal.tenantId());
+        Optional<TenantReadPort.TenantSummary> tenantOpt = tenantReadPort.findById(principal.tenantId());
         if (tenantOpt.isEmpty()) {
             writeError(response, HttpStatus.UNAUTHORIZED, "TENANT_NOT_FOUND", "Tenant not found.");
             return;
         }
-        Tenant tenant = tenantOpt.get();
-        if (!Tenant.Status.ACTIVE.name().equals(tenant.getStatus())) {
+        TenantReadPort.TenantSummary tenant = tenantOpt.get();
+        if (!"ACTIVE".equals(tenant.status())) {
             writeError(response, HttpStatus.FORBIDDEN, "TENANT_SUSPENDED",
-                    "Tenant account is currently " + tenant.getStatus() + ".");
+                    "Tenant account is currently " + tenant.status() + ".");
             return;
         }
 
         // If API token, check API_ACCESS feature entitlement and rate limit
         if (principal.apiTokenAuth()) {
-            EntitlementService.EffectiveEntitlements entitlements = entitlementService.getEffectiveForTenant(principal.tenantId());
+            EntitlementFacade.EffectiveEntitlements entitlements = EntitlementFacade.getEffectiveForTenant(principal.tenantId());
             if (!entitlements.isEnabled(Feature.API_ACCESS)) {
                 writeError(response, HttpStatus.FORBIDDEN, "FEATURE_NOT_ENABLED",
                         "Feature 'API_ACCESS' is not enabled for this tenant.");
@@ -229,35 +218,20 @@ public class TenantAuthAndContextFilter extends OncePerRequestFilter {
 
     private TenantUserPrincipal authenticateApiToken(String rawToken, HttpServletResponse response) throws IOException {
         String hash = JwtTokenService.sha256Hex(rawToken);
-        Optional<ApiToken> tokenOpt = apiTokenRepository.findByTokenHash(hash);
+        Optional<TenantReadPort.ApiTokenPrincipal> tokenOpt = tenantReadPort.authenticateApiToken(hash);
         if (tokenOpt.isEmpty()) {
-            writeError(response, HttpStatus.UNAUTHORIZED, "INVALID_API_TOKEN", "Invalid API token.");
+            writeError(response, HttpStatus.UNAUTHORIZED, "INVALID_API_TOKEN", "Invalid, expired, or disabled API token.");
             return null;
         }
-        ApiToken apiToken = tokenOpt.get();
-        if (apiToken.isRevoked() || (apiToken.getExpiresAt() != null && apiToken.getExpiresAt().isBefore(Instant.now()))) {
-            writeError(response, HttpStatus.UNAUTHORIZED, "API_TOKEN_EXPIRED_OR_REVOKED", "API token is expired or revoked.");
-            return null;
-        }
-        Optional<UserAccount> userOpt = userAccountRepository.findByTenantIdAndId(apiToken.getTenantId(), apiToken.getUserId());
-        if (userOpt.isEmpty() || !UserAccount.Status.ACTIVE.name().equals(userOpt.get().getStatus())) {
-            writeError(response, HttpStatus.UNAUTHORIZED, "USER_DISABLED", "API token owner account is disabled.");
-            return null;
-        }
-        UserAccount user = userOpt.get();
-        Set<String> scopes = Arrays.stream(apiToken.getScopes().split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .collect(Collectors.toSet());
-
+        TenantReadPort.ApiTokenPrincipal p = tokenOpt.get();
         return new TenantUserPrincipal(
-                user.getId(),
-                apiToken.getTenantId(),
-                user.getEmail(),
-                user.getFullName(),
-                scopes,
+                p.userId(),
+                p.tenantId(),
+                p.email(),
+                p.fullName(),
+                p.scopes(),
                 true,
-                apiToken.getId()
+                p.apiTokenId()
         );
     }
 

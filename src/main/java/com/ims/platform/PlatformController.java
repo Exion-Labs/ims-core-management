@@ -2,7 +2,8 @@ package com.ims.platform;
 
 import com.ims.common.outbox.OutboxEvent;
 import com.ims.config.security.JwtTokenService;
-import com.ims.tenant.AuthService;
+import com.ims.entitlement.spi.EntitlementAdminPort;
+import com.ims.identity.spi.TenantProvisioningPort;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -67,7 +68,7 @@ public class PlatformController {
     ) {
         return platformService.createTenant(
                 principal(auth),
-                new AuthService.RegisterTenantCommand(
+                new TenantProvisioningPort.ProvisionTenantCommand(
                         payload.tenantName(),
                         payload.tenantSlug(),
                         payload.adminEmail(),
@@ -110,12 +111,12 @@ public class PlatformController {
     }
 
     @GetMapping("/plans")
-    public List<PlatformService.PlanView> listPlans() {
+    public List<EntitlementAdminPort.PlanView> listPlans() {
         return platformService.listPlans();
     }
 
     @PutMapping("/plans/{planId}/features/{featureKey}")
-    public PlatformService.PlanView updatePlanFeature(
+    public EntitlementAdminPort.PlanView updatePlanFeature(
             Authentication auth,
             @PathVariable UUID planId,
             @PathVariable String featureKey,

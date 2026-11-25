@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Published whenever a tenant's plan or feature overrides change, evicting the EntitlementService cache.
+ * Published whenever a tenant's plan or feature overrides change, evicting the EntitlementFacade cache.
  */
 public record EntitlementsChangedEvent(
         UUID tenantId,

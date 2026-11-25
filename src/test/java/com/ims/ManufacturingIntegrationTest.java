@@ -2,13 +2,13 @@ package com.ims;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ims.build.BuildService;
+import com.ims.manufacturing.application.BuildService;
 import com.ims.config.security.TenantAuthAndContextFilter;
 import com.ims.config.tenant.TenantContext;
-import com.ims.stock.StockItem;
-import com.ims.stock.StockReconciliationJob;
-import com.ims.stock.StockService;
-import com.ims.tenant.AuthService;
+import com.ims.stock.domain.model.StockItem;
+import com.ims.stock.application.StockReconciliationJob;
+import com.ims.stock.application.StockService;
+import com.ims.identity.spi.TenantProvisioningPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -64,7 +64,7 @@ class ManufacturingIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private AuthService authService;
+    private TenantProvisioningPort TenantProvisioningPort;
 
     @Autowired
     private BuildService buildService;
@@ -78,12 +78,12 @@ class ManufacturingIntegrationTest {
     @Value("${ims.security.proxy-secret}")
     private String proxySecret;
 
-    private AuthService.AuthTokensResponse tenant;
+    private TenantProvisioningPort.AuthTokensResponse tenant;
 
     @BeforeEach
     void setUp() {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
-        tenant = authService.registerTenant(new AuthService.RegisterTenantCommand(
+        tenant = TenantProvisioningPort.registerTenant(new TenantProvisioningPort.ProvisionTenantCommand(
                 "Factory Corp " + suffix,
                 "factory-" + suffix,
                 "factory-" + suffix + "@example.com",

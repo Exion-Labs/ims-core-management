@@ -2,10 +2,10 @@ package com.ims;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ims.company.CurrencyService;
+import com.ims.partner.application.CurrencyService;
 import com.ims.config.security.TenantAuthAndContextFilter;
-import com.ims.stock.StockReconciliationJob;
-import com.ims.tenant.AuthService;
+import com.ims.stock.application.StockReconciliationJob;
+import com.ims.identity.spi.TenantProvisioningPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,7 +56,7 @@ class PurchaseOrderIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private AuthService authService;
+    private TenantProvisioningPort TenantProvisioningPort;
 
     @Autowired
     private CurrencyService currencyService;
@@ -67,13 +67,13 @@ class PurchaseOrderIntegrationTest {
     @Value("${ims.security.proxy-secret}")
     private String proxySecret;
 
-    private AuthService.AuthTokensResponse tenant;
+    private TenantProvisioningPort.AuthTokensResponse tenant;
 
     @BeforeEach
     void setUp() {
         currencyService.ensureDefaultRatesSeeded();
         String suffix = UUID.randomUUID().toString().substring(0, 8);
-        tenant = authService.registerTenant(new AuthService.RegisterTenantCommand(
+        tenant = TenantProvisioningPort.registerTenant(new TenantProvisioningPort.ProvisionTenantCommand(
                 "Purchasing Corp " + suffix,
                 "po-corp-" + suffix,
                 "po-" + suffix + "@example.com",

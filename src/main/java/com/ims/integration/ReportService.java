@@ -4,12 +4,9 @@ import com.github.jknack.handlebars.Context;
 import com.github.jknack.handlebars.Handlebars;
 import com.github.jknack.handlebars.Template;
 import com.github.jknack.handlebars.context.MapValueResolver;
-import com.ims.build.BuildService;
-import com.ims.common.entitlement.Feature;
-import com.ims.common.entitlement.RequiresFeature;
-import com.ims.order.fulfillment.SalesOrderService;
-import com.ims.order.purchase.PurchaseOrderService;
-import com.ims.part.PartService;
+import com.ims.entitlement.spi.Feature;
+import com.ims.entitlement.spi.RequiresFeature;
+import com.ims.integration.spi.ReportDataProvider;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -46,24 +43,18 @@ public class ReportService {
     ) {}
 
     private final ReportTemplateRepository templateRepository;
-    private final PartService partService;
-    private final PurchaseOrderService purchaseOrderService;
-    private final BuildService buildService;
-    private final SalesOrderService salesOrderService;
+    private final Map<String, ReportDataProvider> dataProviders;
     private final Handlebars handlebars;
 
     public ReportService(
             ReportTemplateRepository templateRepository,
-            PartService partService,
-            PurchaseOrderService purchaseOrderService,
-            BuildService buildService,
-            SalesOrderService salesOrderService
+            List<ReportDataProvider> providers
     ) {
         this.templateRepository = templateRepository;
-        this.partService = partService;
-        this.purchaseOrderService = purchaseOrderService;
-        this.buildService = buildService;
-        this.salesOrderService = salesOrderService;
+        this.dataProviders = new HashMap<>();
+        for (ReportDataProvider provider : providers) {
+            this.dataProviders.put(provider.entityType(), provider);
+        }
         this.handlebars = new Handlebars();
     }
 
@@ -131,41 +122,11 @@ public class ReportService {
         if (entityId == null) {
             return model;
         }
-        switch (entityType) {
-            case "PART" -> {
-                var p = partService.getPart(entityId);
-                model.put("id", p.id().toString());
-                model.put("ipn", p.ipn() != null ? p.ipn() : "");
-                model.put("name", p.name());
-                model.put("description", p.description() != null ? p.description() : "");
-                model.put("unit", p.unit() != null ? p.unit() : "");
-            }
-            case "PURCHASE_ORDER" -> {
-                var po = purchaseOrderService.getPurchaseOrder(entityId);
-                model.put("id", po.id().toString());
-                model.put("reference", po.reference());
-                model.put("supplierName", po.supplierName());
-                model.put("status", po.status());
-                model.put("currency", po.currency());
-            }
-            case "BUILD_ORDER" -> {
-                var bo = buildService.getBuildOrder(entityId);
-                model.put("id", bo.id().toString());
-                model.put("reference", bo.reference());
-                model.put("title", bo.title());
-                model.put("partName", bo.partName());
-                model.put("quantity", bo.quantity().toPlainString());
-                model.put("status", bo.status());
-            }
-            case "SALES_ORDER" -> {
-                var so = salesOrderService.getSalesOrder(entityId);
-                model.put("id", so.id().toString());
-                model.put("reference", so.reference());
-                model.put("customerName", so.customerName());
-                model.put("status", so.status());
-                model.put("currency", so.currency());
-            }
-            default -> model.put("entityId", entityId.toString());
+        ReportDataProvider provider = dataProviders.get(entityType);
+        if (provider != null) {
+            model.putAll(provider.buildModel(entityId));
+        } else {
+            model.put("entityId", entityId.toString());
         }
         return model;
     }

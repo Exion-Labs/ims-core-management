@@ -1,7 +1,7 @@
 package com.ims.integration;
 
-import com.ims.common.entitlement.Feature;
-import com.ims.common.entitlement.RequiresFeature;
+import com.ims.entitlement.spi.Feature;
+import com.ims.entitlement.spi.RequiresFeature;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;

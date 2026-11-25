@@ -3,7 +3,7 @@ package com.ims;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ims.config.security.TenantAuthAndContextFilter;
-import com.ims.tenant.AuthService;
+import com.ims.identity.spi.TenantProvisioningPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,7 +39,7 @@ class FulfillmentIntegrationTest {
 
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
-    @Autowired AuthService authService;
+    @Autowired TenantProvisioningPort TenantProvisioningPort;
 
     @Value("${ims.security.proxy-secret}")
     private String proxySecret;
@@ -49,7 +49,7 @@ class FulfillmentIntegrationTest {
     @BeforeEach
     void setUp() {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
-        var tenant = authService.registerTenant(new AuthService.RegisterTenantCommand(
+        var tenant = TenantProvisioningPort.registerTenant(new TenantProvisioningPort.ProvisionTenantCommand(
                 "Fulfillment Corp " + suffix,
                 "ff-corp-" + suffix,
                 "ff-" + suffix + "@example.com",

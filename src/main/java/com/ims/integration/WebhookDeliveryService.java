@@ -1,9 +1,9 @@
 package com.ims.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ims.common.entitlement.EntitlementService;
-import com.ims.common.entitlement.Feature;
-import com.ims.common.entitlement.RequiresFeature;
+import com.ims.entitlement.spi.EntitlementFacade;
+import com.ims.entitlement.spi.Feature;
+import com.ims.entitlement.spi.RequiresFeature;
 import com.ims.common.outbox.OutboxEvent;
 import com.ims.common.outbox.OutboxEventHandler;
 import org.springframework.http.HttpStatus;
@@ -51,17 +51,17 @@ public class WebhookDeliveryService implements OutboxEventHandler {
     ) {}
 
     private final WebhookSubscriptionRepository subscriptionRepository;
-    private final EntitlementService entitlementService;
+    private final EntitlementFacade EntitlementFacade;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
     public WebhookDeliveryService(
             WebhookSubscriptionRepository subscriptionRepository,
-            EntitlementService entitlementService,
+            EntitlementFacade EntitlementFacade,
             ObjectMapper objectMapper
     ) {
         this.subscriptionRepository = subscriptionRepository;
-        this.entitlementService = entitlementService;
+        this.EntitlementFacade = EntitlementFacade;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(5))
@@ -154,7 +154,7 @@ public class WebhookDeliveryService implements OutboxEventHandler {
     @Override
     @Transactional
     public void handle(OutboxEvent event) throws Exception {
-        if (!entitlementService.getEffectiveForTenant(event.getTenantId()).isEnabled(Feature.WEBHOOKS)) {
+        if (!EntitlementFacade.getEffectiveForTenant(event.getTenantId()).isEnabled(Feature.WEBHOOKS)) {
             return;
         }
         List<WebhookSubscription> subs = subscriptionRepository.findByEnabledTrue();

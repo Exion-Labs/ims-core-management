@@ -1,12 +1,13 @@
 package com.ims.config;
 
 import com.ims.config.tenant.TenantContext;
-import com.ims.part.PartCategoryService;
-import com.ims.part.PartService;
-import com.ims.stock.StockLocationService;
-import com.ims.stock.StockService;
-import com.ims.tenant.AuthService;
-import com.ims.tenant.TenantRepository;
+import com.ims.entitlement.spi.EntitlementAdminPort;
+import com.ims.identity.spi.TenantProvisioningPort;
+import com.ims.identity.spi.TenantReadPort;
+import com.ims.catalog.application.PartCategoryService;
+import com.ims.catalog.application.PartService;
+import com.ims.stock.application.StockLocationService;
+import com.ims.stock.application.StockService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
@@ -26,23 +27,26 @@ public class DevDataSeeder implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(DevDataSeeder.class);
 
-    private final AuthService authService;
-    private final TenantRepository tenantRepository;
+    private final TenantProvisioningPort tenantProvisioningPort;
+    private final TenantReadPort tenantReadPort;
+    private final EntitlementAdminPort entitlementAdminPort;
     private final PartCategoryService categoryService;
     private final PartService partService;
     private final StockLocationService stockLocationService;
     private final StockService stockService;
 
     public DevDataSeeder(
-            AuthService authService,
-            TenantRepository tenantRepository,
+            TenantProvisioningPort tenantProvisioningPort,
+            TenantReadPort tenantReadPort,
+            EntitlementAdminPort entitlementAdminPort,
             PartCategoryService categoryService,
             PartService partService,
             StockLocationService stockLocationService,
             StockService stockService
     ) {
-        this.authService = authService;
-        this.tenantRepository = tenantRepository;
+        this.tenantProvisioningPort = tenantProvisioningPort;
+        this.tenantReadPort = tenantReadPort;
+        this.entitlementAdminPort = entitlementAdminPort;
         this.categoryService = categoryService;
         this.partService = partService;
         this.stockLocationService = stockLocationService;
@@ -51,10 +55,10 @@ public class DevDataSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        authService.ensureDefaultPlansSeeded();
+        entitlementAdminPort.ensureDefaultPlansSeeded();
 
-        if (!tenantRepository.existsBySlug("acme-robotics")) {
-            AuthService.AuthTokensResponse acme = authService.registerTenant(new AuthService.RegisterTenantCommand(
+        if (!tenantReadPort.existsBySlug("acme-robotics")) {
+            TenantProvisioningPort.AuthTokensResponse acme = tenantProvisioningPort.registerTenant(new TenantProvisioningPort.ProvisionTenantCommand(
                     "Acme Robotics Ltd",
                     "acme-robotics",
                     "admin@acme-robotics.dev",
@@ -68,11 +72,11 @@ public class DevDataSeeder implements CommandLineRunner {
 
             seedAcmeCatalog(acme.tenantId());
         } else {
-            tenantRepository.findBySlug("acme-robotics").ifPresent(t -> ensureBusinessSampleItems(t.getId()));
+            tenantReadPort.findBySlug("acme-robotics").ifPresent(t -> ensureBusinessSampleItems(t.id()));
         }
 
-        if (!tenantRepository.existsBySlug("nordic-labs")) {
-            AuthService.AuthTokensResponse nordic = authService.registerTenant(new AuthService.RegisterTenantCommand(
+        if (!tenantReadPort.existsBySlug("nordic-labs")) {
+            TenantProvisioningPort.AuthTokensResponse nordic = tenantProvisioningPort.registerTenant(new TenantProvisioningPort.ProvisionTenantCommand(
                     "Nordic Sensor Labs",
                     "nordic-labs",
                     "admin@nordic-labs.dev",
@@ -85,7 +89,7 @@ public class DevDataSeeder implements CommandLineRunner {
             log.info("Seeded Demo Tenant A (STARTER): admin@nordic-labs.dev / Password123!");
             ensureBusinessSampleItems(nordic.tenantId());
         } else {
-            tenantRepository.findBySlug("nordic-labs").ifPresent(t -> ensureBusinessSampleItems(t.getId()));
+            tenantReadPort.findBySlug("nordic-labs").ifPresent(t -> ensureBusinessSampleItems(t.id()));
         }
     }
 
