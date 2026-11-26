@@ -1,0 +1,44 @@
+name: Build and Deploy to Azure VPS
+
+on:
+  push:
+    branches: [ release ] # Change to 'master' if your default branch is master
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build JAR with Maven
+        run: chmod +x mvnw && ./mvnw clean package -DskipTests
+
+      - name: Copy JAR to Azure VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "target/*.jar"
+          target: "/home/azureuser/app/"
+          rm: true
+
+      - name: Restart Backend Container on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd ~/app
+            docker compose up -d --build backend
+            docker image prune -f
