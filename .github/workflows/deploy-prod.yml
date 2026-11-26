@@ -2,7 +2,7 @@ name: Build and Deploy to Azure VPS
 
 on:
   push:
-    branches: [ release ] # Change to 'master' if your default branch is master
+    branches: [ release ]
 
 jobs:
   build-and-deploy:
@@ -20,7 +20,7 @@ jobs:
           cache: maven
 
       - name: Build JAR with Maven
-        run: chmod +x mvnw && ./mvnw clean package -DskipTests
+        run: mvn clean package -DskipTests
 
       - name: Copy JAR to Azure VPS
         uses: appleboy/scp-action@v0.1.7
