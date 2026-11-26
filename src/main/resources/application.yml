@@ -38,6 +38,13 @@ ims:
     enabled: ${IMS_SIGNUP_ENABLED:false}
   outbox:
     poll-interval-ms: 2000
+  idempotency:
+    enabled: true
+    ttl: 24h
+    max-key-length: 255
+    require-for-api-tokens: false   # flip to true in rollout phase 3
+    require-for-sessions: false     # flip to true in rollout phase 4
+    cleanup-cron: "0 15 * * * *"
   security:
     jwt-secret: ${IMS_JWT_SECRET:ims-dev-tenant-jwt-secret-key-must-be-at-least-32-bytes-long-2026}
     proxy-secret: ${IMS_PROXY_SECRET:ims-dev-bff-proxy-secret-2026}

@@ -28,6 +28,7 @@ public class TenantPredicateInspector implements StatementInspector, HibernatePr
             "reference_sequences",
             "attachments",
             "notes",
+            "idempotency_records",
             "audit_event",
             "part_categories",
             "parts",

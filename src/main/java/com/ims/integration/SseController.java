@@ -7,6 +7,7 @@ import com.ims.config.tenant.TenantContext;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import com.ims.common.idempotency.IdempotencyExempt;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -27,6 +28,7 @@ public class SseController {
         this.sseService = sseService;
     }
 
+    @IdempotencyExempt(reason = "Issues a short-lived, single-use SSE ticket; every call must return a fresh ticket")
     @PostMapping("/ticket")
     public Map<String, String> issueTicket(Authentication authentication) {
         UUID tenantId = TenantContext.require();

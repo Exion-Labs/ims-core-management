@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
+import com.ims.common.idempotency.IdempotencyExempt;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,6 +17,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/auth")
+@IdempotencyExempt(reason = "Authentication flows are unauthenticated or token-rotating; replaying them would be wrong")
 public class AuthController {
 
     public record TenantOnboardingDto(

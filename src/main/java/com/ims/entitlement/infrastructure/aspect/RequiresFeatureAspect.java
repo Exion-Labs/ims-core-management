@@ -16,6 +16,7 @@ import java.lang.reflect.Method;
  */
 @Aspect
 @Component
+@org.springframework.core.annotation.Order(org.springframework.core.Ordered.LOWEST_PRECEDENCE - 100)
 public class RequiresFeatureAspect {
 
     private final EntitlementFacade entitlementFacade;

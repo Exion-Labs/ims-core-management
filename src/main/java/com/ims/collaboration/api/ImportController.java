@@ -2,6 +2,7 @@ package com.ims.collaboration.api;
 
 import com.ims.collaboration.application.ImportExportService;
 import com.ims.collaboration.spi.ImportModels;
+import com.ims.common.idempotency.IdempotencyExempt;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -36,6 +37,7 @@ public class ImportController {
         this.importExportService = importExportService;
     }
 
+    @IdempotencyExempt(reason = "Multipart file upload cannot be fingerprinted or replayed as JSON")
     @PostMapping(value = "/sessions", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
     public ImportModels.ImportSessionView createSession(

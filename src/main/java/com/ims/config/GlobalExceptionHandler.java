@@ -1,5 +1,8 @@
 package com.ims.config;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.ims.common.idempotency.IdempotencyAspect;
+import com.ims.common.idempotency.IdempotentReplay;
 import com.ims.entitlement.spi.FeatureNotEnabledException;
 import com.ims.entitlement.spi.LimitReachedException;
 import com.ims.shared.exception.BusinessRuleException;
@@ -9,6 +12,7 @@ import com.ims.shared.exception.ResourceNotFoundException;
 import com.ims.shared.exception.UnauthorizedException;
 import com.ims.shared.exception.ValidationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -22,6 +26,16 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(IdempotentReplay.class)
+    public ResponseEntity<JsonNode> handleIdempotentReplay(IdempotentReplay replay) {
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(replay.getStatus())
+                .header(IdempotencyAspect.REPLAYED_HEADER, "true");
+        if (replay.getBody() == null) {
+            return builder.build();
+        }
+        return builder.contentType(MediaType.APPLICATION_JSON).body(replay.getBody());
+    }
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleNotFound(ResourceNotFoundException ex) {

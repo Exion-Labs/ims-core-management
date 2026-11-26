@@ -2,6 +2,7 @@ package com.ims.stock.api;
 
 import com.ims.stock.application.*;
 
+import com.ims.common.idempotency.IdempotencyExempt;
 import com.ims.entitlement.spi.Feature;
 import com.ims.entitlement.spi.RequiresFeature;
 import jakarta.validation.Valid;
@@ -224,6 +225,7 @@ public class StockController {
         return stockService.getPartStockSummary(partId);
     }
 
+    @IdempotencyExempt(reason = "Read-only batch lookup exposed via POST because of the request body size")
     @PostMapping("/stock/summaries")
     @PreAuthorize("hasAuthority('STOCK:VIEW')")
     public Map<UUID, StockService.StockSummaryView> getBatchStockSummaries(
@@ -282,6 +284,7 @@ public class StockController {
     // 2.6 Barcodes & Scan Resolver
     // =========================================================================
 
+    @IdempotencyExempt(reason = "Read-only barcode resolution exposed via POST")
     @PostMapping("/barcode/scan")
     @PreAuthorize("hasAuthority('STOCK:VIEW')")
     @RequiresFeature(Feature.BARCODES)

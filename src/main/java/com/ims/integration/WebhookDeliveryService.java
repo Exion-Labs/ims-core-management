@@ -180,6 +180,8 @@ public class WebhookDeliveryService implements OutboxEventHandler {
                     .timeout(Duration.ofSeconds(10))
                     .header("Content-Type", "application/json")
                     .header("X-IMS-Event", event.getEventType())
+                    .header("X-IMS-Event-Id", event.getId().toString())
+                    .header("X-IMS-Delivery-Attempt", String.valueOf(event.getAttempts()))
                     .header("X-IMS-Signature", sig)
                     .POST(HttpRequest.BodyPublishers.ofString(payload))
                     .build();
