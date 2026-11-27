@@ -150,6 +150,12 @@ public class StockService {
             String notes
     ) {}
 
+    public record UpdateStockStatusCommand(
+            String status,
+            UUID locationId,
+            String notes
+    ) {}
+
     public record SerializeStockCommand(
             List<String> serialNumbers,
             UUID targetLocationId,
@@ -901,9 +907,19 @@ public class StockService {
 
     @Transactional
     public StockItemView updateStockStatus(UUID stockItemId, String newStatus, UUID newLocationId, String notes) {
+        if (newStatus == null || newStatus.isBlank()) {
+            throw new ValidationException("status is required");
+        }
+        String normalizedStatus = newStatus.trim().toUpperCase(Locale.ROOT);
+        try {
+            StockItem.Status.valueOf(normalizedStatus);
+        } catch (IllegalArgumentException e) {
+            throw new ValidationException("Invalid stock status: " + newStatus);
+        }
+
         StockItem item = requireStockItemForUpdate(stockItemId);
         boolean wasInStock = item.countsTowardInStock();
-        item.setStatus(newStatus);
+        item.setStatus(normalizedStatus);
         if (newLocationId != null) {
             StockLocation loc = locationService.requireLocation(newLocationId);
             if (loc.isStructural()) {

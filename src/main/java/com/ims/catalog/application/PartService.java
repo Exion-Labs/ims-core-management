@@ -149,8 +149,13 @@ public class PartService {
 
     public record UpsertPartParameterCommand(
             UUID templateId,
+            String name,
             String value
-    ) {}
+    ) {
+        public UpsertPartParameterCommand(UUID templateId, String value) {
+            this(templateId, null, value);
+        }
+    }
 
     public record PartSearchFilter(
             String q,
@@ -651,10 +656,20 @@ public class PartService {
         if (part.isLocked()) {
             throw new ConflictException("Part is locked and parameters cannot be modified");
         }
-        if (cmd.templateId() == null) {
-            throw new ValidationException("templateId is required");
+        ParameterTemplate template;
+        if (cmd.templateId() != null) {
+            template = requireTemplate(cmd.templateId());
+        } else if (cmd.name() != null && !cmd.name().isBlank()) {
+            String trimmedName = cmd.name().trim();
+            template = templateRepository.findByNameIgnoreCase(trimmedName)
+                    .orElseGet(() -> {
+                        ParameterTemplate created = new ParameterTemplate();
+                        created.setName(trimmedName);
+                        return templateRepository.saveAndFlush(created);
+                    });
+        } else {
+            throw new ValidationException("Either templateId or specification name is required");
         }
-        ParameterTemplate template = requireTemplate(cmd.templateId());
         PartParameterValidator.ValidatedParameter validated = parameterValidator.validateAndNormalize(template, cmd.value());
 
         PartParameter param = parameterRepository.findByPartIdAndTemplateId(partId, template.getId())
