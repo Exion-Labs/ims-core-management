@@ -119,6 +119,12 @@ public class SalesOrderService {
             String notes
     ) {}
 
+    public record UpdateSalesOrderLineCommand(
+            BigDecimal quantity,
+            BigDecimal salePrice,
+            String notes
+    ) {}
+
     public record CreateShipmentCommand(
             String reference,
             String trackingNumber,
@@ -249,6 +255,59 @@ public class SalesOrderService {
         line.setReference(cmd.reference());
         line.setNotes(cmd.notes());
         lineItemRepository.saveAndFlush(line);
+        return toView(so, true);
+    }
+
+    @Transactional
+    public SalesOrderView updateLineItem(UUID salesOrderId, UUID lineId, UpdateSalesOrderLineCommand cmd) {
+        SalesOrder so = requireSalesOrder(salesOrderId);
+        if (!"PENDING".equals(so.getStatus()) && !"IN_PROGRESS".equals(so.getStatus())) {
+            throw new BusinessRuleException("Cannot update lines on order in status " + so.getStatus());
+        }
+        SalesOrderLineItem line = lineItemRepository.findById(lineId)
+                .filter(l -> l.getSalesOrderId().equals(so.getId()))
+                .orElseThrow(() -> new ResourceNotFoundException("Sales order line not found: " + lineId));
+        if (cmd.quantity() == null || cmd.quantity().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException("quantity must be > 0");
+        }
+        BigDecimal allocated = allocationRepository.findByLineItemIdOrderByCreatedAtAsc(line.getId()).stream()
+                .filter(a -> !a.isShipped())
+                .map(SalesOrderAllocation::getQuantity)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal minAllowed = line.getShipped().add(allocated);
+        if (cmd.quantity().compareTo(minAllowed) < 0) {
+            throw new BusinessRuleException(
+                    "Cannot reduce quantity below already allocated/shipped amount (" + minAllowed + ")"
+            );
+        }
+        line.setQuantity(cmd.quantity());
+        line.setSalePrice(cmd.salePrice());
+        if (cmd.notes() != null) {
+            line.setNotes(cmd.notes());
+        }
+        lineItemRepository.saveAndFlush(line);
+        return toView(so, true);
+    }
+
+    @Transactional
+    public SalesOrderView deleteLineItem(UUID salesOrderId, UUID lineId) {
+        SalesOrder so = requireSalesOrder(salesOrderId);
+        if (!"PENDING".equals(so.getStatus()) && !"IN_PROGRESS".equals(so.getStatus())) {
+            throw new BusinessRuleException("Cannot delete lines from order in status " + so.getStatus());
+        }
+        SalesOrderLineItem line = lineItemRepository.findById(lineId)
+                .filter(l -> l.getSalesOrderId().equals(so.getId()))
+                .orElseThrow(() -> new ResourceNotFoundException("Sales order line not found: " + lineId));
+        if (line.getShipped().compareTo(BigDecimal.ZERO) > 0) {
+            throw new BusinessRuleException("Cannot delete a line that already has shipped items");
+        }
+        boolean hasAllocations = allocationRepository.findByLineItemIdOrderByCreatedAtAsc(line.getId()).stream()
+                .anyMatch(a -> !a.isShipped());
+        if (hasAllocations) {
+            throw new BusinessRuleException("Cannot delete a line with allocated stock; cancel the order to release allocations");
+        }
+        lineItemRepository.delete(line);
+        lineItemRepository.flush();
         return toView(so, true);
     }
 

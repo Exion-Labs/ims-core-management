@@ -107,7 +107,7 @@ public class PartParameterValidator {
         }
         String trimmed = rawValue.trim();
 
-        // 1. Checkbox boolean template
+        // 1. Checkbox boolean template (normalize true/false if recognized, otherwise allow free text)
         if (template.isCheckbox()) {
             String lower = trimmed.toLowerCase(Locale.ROOT);
             if (lower.equals("true") || lower.equals("1") || lower.equals("yes")) {
@@ -116,69 +116,30 @@ public class PartParameterValidator {
             if (lower.equals("false") || lower.equals("0") || lower.equals("no")) {
                 return new ValidatedParameter("false", 0.0);
             }
-            throw new ValidationException("Parameter '" + template.getName() + "' is a boolean checkbox; expected true or false"
-            );
+            return new ValidatedParameter(trimmed, tryParseDouble(trimmed));
         }
 
-        // 2. Choice-constrained template
-        if (template.getChoices() != null && !template.getChoices().isBlank()) {
-            List<String> allowed = Arrays.stream(template.getChoices().split(","))
-                    .map(String::trim)
-                    .filter(s -> !s.isEmpty())
-                    .toList();
-            String matchedChoice = allowed.stream()
-                    .filter(c -> c.equalsIgnoreCase(trimmed))
-                    .findFirst()
-                    .orElseThrow(() -> new ValidationException("Value '" + trimmed + "' for parameter '" + template.getName() + "' must be one of: " + String.join(", ", allowed)
-                    ));
-            Double maybeNum = tryParseDouble(matchedChoice);
-            return new ValidatedParameter(matchedChoice, maybeNum);
-        }
-
-        // 3. Unit-aware template (Indriya JSR-385 normalization)
+        // 2. Unit-aware template (best-effort Indriya JSR-385 normalization; falls back to free text)
         if (template.getUnits() != null && !template.getUnits().isBlank()) {
             Unit templateUnit = resolveUnit(template.getUnits().trim());
-            if (templateUnit == null) {
-                throw new ValidationException("Template unit '" + template.getUnits() + "' is not recognized");
-            }
-
             Matcher matcher = QUANTITY_PATTERN.matcher(trimmed);
-            if (!matcher.matches()) {
-                throw new ValidationException("Invalid numeric quantity '" + trimmed + "' for parameter '" + template.getName() + "' (" + template.getUnits() + ")"
-                );
-            }
+            if (templateUnit != null && matcher.matches()) {
+                double number = Double.parseDouble(matcher.group(1));
+                String unitPart = matcher.group(2) != null ? matcher.group(2).trim() : "";
 
-            double number = Double.parseDouble(matcher.group(1));
-            String unitPart = matcher.group(2) != null ? matcher.group(2).trim() : "";
-
-            Unit inputUnit;
-            String displayUnit;
-            if (unitPart.isEmpty()) {
-                inputUnit = templateUnit;
-                displayUnit = template.getUnits().trim();
-            } else {
-                inputUnit = resolveUnit(unitPart);
-                if (inputUnit == null) {
-                    throw new ValidationException("Unrecognized unit '" + unitPart + "' in value '" + trimmed + "' for parameter '" + template.getName() + "'"
-                    );
+                Unit inputUnit = unitPart.isEmpty() ? templateUnit : resolveUnit(unitPart);
+                String displayUnit = unitPart.isEmpty() ? template.getUnits().trim() : unitPart;
+                if (inputUnit != null && inputUnit.isCompatible(templateUnit)) {
+                    Quantity quantity = Quantities.getQuantity(number, inputUnit);
+                    Unit systemUnit = templateUnit.getSystemUnit();
+                    Quantity siQuantity = quantity.to(systemUnit);
+                    double siValue = siQuantity.getValue().doubleValue();
+                    return new ValidatedParameter(matcher.group(1) + " " + displayUnit, siValue);
                 }
-                if (!inputUnit.isCompatible(templateUnit)) {
-                    throw new ValidationException("Unit '" + unitPart + "' is incompatible with template unit '" + template.getUnits() + "' for parameter '" + template.getName() + "'"
-                    );
-                }
-                displayUnit = unitPart;
             }
-
-            Quantity quantity = Quantities.getQuantity(number, inputUnit);
-            Unit systemUnit = templateUnit.getSystemUnit();
-            Quantity siQuantity = quantity.to(systemUnit);
-            double siValue = siQuantity.getValue().doubleValue();
-
-            String formattedNumber = matcher.group(1);
-            return new ValidatedParameter(formattedNumber + " " + displayUnit, siValue);
         }
 
-        // 4. Unconstrained text or plain number template
+        // 3. Free-form text or numeric value (choices are treated as suggestions, not strict restrictions)
         Matcher matcher = QUANTITY_PATTERN.matcher(trimmed);
         if (matcher.matches() && (matcher.group(2) == null || matcher.group(2).isBlank())) {
             return new ValidatedParameter(trimmed, Double.parseDouble(matcher.group(1)));

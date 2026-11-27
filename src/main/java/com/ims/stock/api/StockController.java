@@ -213,6 +213,15 @@ public class StockController {
         return stockService.serializeStock(id, command);
     }
 
+    @PostMapping("/stock-items/{id}/status")
+    @PreAuthorize("hasAuthority('STOCK:UPDATE')")
+    public StockService.StockItemView updateStockStatus(
+            @PathVariable UUID id,
+            @Valid @RequestBody StockService.UpdateStockStatusCommand command
+    ) {
+        return stockService.updateStockStatus(id, command.status(), command.locationId(), command.notes());
+    }
+
     @GetMapping("/stock-items/{id}/tracking")
     @PreAuthorize("hasAuthority('STOCK:VIEW')")
     public List<StockService.StockTrackingView> listTrackingHistory(@PathVariable UUID id) {
