@@ -330,10 +330,7 @@ public class CompanyService {
     public List<ContactView> listContacts(UUID companyId) {
         requireCompany(companyId);
         return contactRepository.findByCompanyIdOrderByPrimaryContactDescNameAsc(companyId).stream()
-                .map(c -> new ContactView(
-                        c.getId(), c.getCompanyId(), c.getName(), c.getRoleTitle(),
-                        c.getEmail(), c.getPhone(), c.isPrimaryContact()
-                ))
+                .map(this::toContactView)
                 .toList();
     }
 
@@ -350,11 +347,26 @@ public class CompanyService {
         c.setEmail(cmd.email());
         c.setPhone(cmd.phone());
         c.setPrimaryContact(Boolean.TRUE.equals(cmd.primaryContact()));
-        Contact saved = contactRepository.saveAndFlush(c);
-        return new ContactView(
-                saved.getId(), saved.getCompanyId(), saved.getName(), saved.getRoleTitle(),
-                saved.getEmail(), saved.getPhone(), saved.isPrimaryContact()
-        );
+        return toContactView(contactRepository.saveAndFlush(c));
+    }
+
+    @Transactional
+    public ContactView updateContact(UUID companyId, UUID contactId, CreateContactCommand cmd) {
+        requireCompany(companyId);
+        if (cmd.name() == null || cmd.name().isBlank()) {
+            throw new ValidationException("Contact name is required");
+        }
+        Contact c = contactRepository.findById(contactId)
+                .filter(ct -> ct.getCompanyId().equals(companyId))
+                .orElseThrow(() -> new ResourceNotFoundException("Contact not found"));
+        c.setName(cmd.name().trim());
+        c.setRoleTitle(cmd.roleTitle());
+        c.setEmail(cmd.email());
+        c.setPhone(cmd.phone());
+        if (cmd.primaryContact() != null) {
+            c.setPrimaryContact(cmd.primaryContact());
+        }
+        return toContactView(contactRepository.saveAndFlush(c));
     }
 
     @Transactional
@@ -370,11 +382,7 @@ public class CompanyService {
     public List<AddressView> listAddresses(UUID companyId) {
         requireCompany(companyId);
         return addressRepository.findByCompanyIdOrderByLabelAsc(companyId).stream()
-                .map(a -> new AddressView(
-                        a.getId(), a.getCompanyId(), a.getLabel(), a.getLine1(), a.getLine2(),
-                        a.getCity(), a.getStateRegion(), a.getPostalCode(), a.getCountry(),
-                        a.isPrimaryShipping(), a.isPrimaryBilling()
-                ))
+                .map(this::toAddressView)
                 .toList();
     }
 
@@ -395,12 +403,32 @@ public class CompanyService {
         a.setCountry(cmd.country() != null && !cmd.country().isBlank() ? cmd.country().trim() : "US");
         a.setPrimaryShipping(Boolean.TRUE.equals(cmd.primaryShipping()));
         a.setPrimaryBilling(Boolean.TRUE.equals(cmd.primaryBilling()));
-        Address saved = addressRepository.saveAndFlush(a);
-        return new AddressView(
-                saved.getId(), saved.getCompanyId(), saved.getLabel(), saved.getLine1(), saved.getLine2(),
-                saved.getCity(), saved.getStateRegion(), saved.getPostalCode(), saved.getCountry(),
-                saved.isPrimaryShipping(), saved.isPrimaryBilling()
-        );
+        return toAddressView(addressRepository.saveAndFlush(a));
+    }
+
+    @Transactional
+    public AddressView updateAddress(UUID companyId, UUID addressId, CreateAddressCommand cmd) {
+        requireCompany(companyId);
+        if (cmd.label() == null || cmd.label().isBlank() || cmd.line1() == null || cmd.line1().isBlank()) {
+            throw new ValidationException("Address label and line1 are required");
+        }
+        Address a = addressRepository.findById(addressId)
+                .filter(ad -> ad.getCompanyId().equals(companyId))
+                .orElseThrow(() -> new ResourceNotFoundException("Address not found"));
+        a.setLabel(cmd.label().trim());
+        a.setLine1(cmd.line1().trim());
+        a.setLine2(cmd.line2());
+        a.setCity(cmd.city());
+        a.setStateRegion(cmd.stateRegion());
+        a.setPostalCode(cmd.postalCode());
+        a.setCountry(cmd.country() != null && !cmd.country().isBlank() ? cmd.country().trim() : "US");
+        if (cmd.primaryShipping() != null) {
+            a.setPrimaryShipping(cmd.primaryShipping());
+        }
+        if (cmd.primaryBilling() != null) {
+            a.setPrimaryBilling(cmd.primaryBilling());
+        }
+        return toAddressView(addressRepository.saveAndFlush(a));
     }
 
     @Transactional
@@ -410,6 +438,21 @@ public class CompanyService {
                 .filter(ad -> ad.getCompanyId().equals(companyId))
                 .orElseThrow(() -> new ResourceNotFoundException("Address not found"));
         addressRepository.delete(a);
+    }
+
+    private ContactView toContactView(Contact c) {
+        return new ContactView(
+                c.getId(), c.getCompanyId(), c.getName(), c.getRoleTitle(),
+                c.getEmail(), c.getPhone(), c.isPrimaryContact()
+        );
+    }
+
+    private AddressView toAddressView(Address a) {
+        return new AddressView(
+                a.getId(), a.getCompanyId(), a.getLabel(), a.getLine1(), a.getLine2(),
+                a.getCity(), a.getStateRegion(), a.getPostalCode(), a.getCountry(),
+                a.isPrimaryShipping(), a.isPrimaryBilling()
+        );
     }
 
     // =========================================================================

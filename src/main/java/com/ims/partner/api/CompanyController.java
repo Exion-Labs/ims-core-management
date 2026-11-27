@@ -109,6 +109,16 @@ public class CompanyController {
         return companyService.createContact(id, command);
     }
 
+    @PutMapping("/companies/{id}/contacts/{contactId}")
+    @PreAuthorize("hasAuthority('COMPANY:UPDATE')")
+    public CompanyService.ContactView updateContact(
+            @PathVariable UUID id,
+            @PathVariable UUID contactId,
+            @Valid @RequestBody CompanyService.CreateContactCommand command
+    ) {
+        return companyService.updateContact(id, contactId, command);
+    }
+
     @DeleteMapping("/companies/{id}/contacts/{contactId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAuthority('COMPANY:UPDATE')")
@@ -130,6 +140,16 @@ public class CompanyController {
             @Valid @RequestBody CompanyService.CreateAddressCommand command
     ) {
         return companyService.createAddress(id, command);
+    }
+
+    @PutMapping("/companies/{id}/addresses/{addressId}")
+    @PreAuthorize("hasAuthority('COMPANY:UPDATE')")
+    public CompanyService.AddressView updateAddress(
+            @PathVariable UUID id,
+            @PathVariable UUID addressId,
+            @Valid @RequestBody CompanyService.CreateAddressCommand command
+    ) {
+        return companyService.updateAddress(id, addressId, command);
     }
 
     @DeleteMapping("/companies/{id}/addresses/{addressId}")
