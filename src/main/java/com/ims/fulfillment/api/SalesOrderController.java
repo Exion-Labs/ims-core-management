@@ -10,9 +10,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -66,6 +68,25 @@ public class SalesOrderController {
             @Valid @RequestBody SalesOrderService.AddSalesOrderLineCommand cmd
     ) {
         return salesOrderService.addLineItem(id, cmd);
+    }
+
+    @PutMapping("/{id}/lines/{lineId}")
+    @PreAuthorize("hasAuthority('ORDER:UPDATE')")
+    public SalesOrderService.SalesOrderView updateLine(
+            @PathVariable UUID id,
+            @PathVariable UUID lineId,
+            @Valid @RequestBody SalesOrderService.UpdateSalesOrderLineCommand cmd
+    ) {
+        return salesOrderService.updateLineItem(id, lineId, cmd);
+    }
+
+    @DeleteMapping("/{id}/lines/{lineId}")
+    @PreAuthorize("hasAuthority('ORDER:UPDATE')")
+    public SalesOrderService.SalesOrderView deleteLine(
+            @PathVariable UUID id,
+            @PathVariable UUID lineId
+    ) {
+        return salesOrderService.deleteLineItem(id, lineId);
     }
 
     @PostMapping("/{id}/issue")
