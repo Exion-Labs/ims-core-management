@@ -253,10 +253,84 @@ public class SalesOrderService {
     }
 
     @Transactional
+    public SalesOrderView updateLineItem(UUID salesOrderId, UUID lineId, UpdateSalesOrderLineCommand cmd) {
+        SalesOrder so = requireSalesOrder(salesOrderId);
+        if (!"PENDING".equals(so.getStatus()) && !"IN_PROGRESS".equals(so.getStatus())) {
+            throw new BusinessRuleException("Cannot update lines on order in status " + so.getStatus());
+        }
+        SalesOrderLineItem line = lineItemRepository.findById(lineId)
+                .filter(l -> l.getSalesOrderId().equals(so.getId()))
+                .orElseThrow(() -> new ResourceNotFoundException("Sales order line not found: " + lineId));
+        if (cmd.quantity() == null || cmd.quantity().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException("quantity must be > 0");
+        }
+        if (line.getShipped().compareTo(BigDecimal.ZERO) > 0) {
+            throw new BusinessRuleException("Cannot edit a line that already has shipped items");
+        }
+        boolean hasAllocations = allocationRepository.findByLineItemIdOrderByCreatedAtAsc(line.getId()).stream()
+                .anyMatch(a -> !a.isShipped());
+        if (hasAllocations) {
+            throw new BusinessRuleException("Cannot edit a line with allocated stock; deallocate stock first");
+        }
+        line.setQuantity(cmd.quantity());
+        line.setSalePrice(cmd.salePrice());
+        if (cmd.notes() != null) {
+            line.setNotes(cmd.notes());
+        }
+        lineItemRepository.saveAndFlush(line);
+        return toView(so, true);
+    }
+
+    @Transactional
+    public SalesOrderView deleteLineItem(UUID salesOrderId, UUID lineId) {
+        SalesOrder so = requireSalesOrder(salesOrderId);
+        if (!"PENDING".equals(so.getStatus()) && !"IN_PROGRESS".equals(so.getStatus())) {
+            throw new BusinessRuleException("Cannot delete lines from order in status " + so.getStatus());
+        }
+        SalesOrderLineItem line = lineItemRepository.findById(lineId)
+                .filter(l -> l.getSalesOrderId().equals(so.getId()))
+                .orElseThrow(() -> new ResourceNotFoundException("Sales order line not found: " + lineId));
+        if (line.getShipped().compareTo(BigDecimal.ZERO) > 0) {
+            throw new BusinessRuleException("Cannot delete a line that already has shipped items");
+        }
+        boolean hasAllocations = allocationRepository.findByLineItemIdOrderByCreatedAtAsc(line.getId()).stream()
+                .anyMatch(a -> !a.isShipped());
+        if (hasAllocations) {
+            throw new BusinessRuleException("Cannot delete a line with allocated stock; deallocate stock first");
+        }
+        lineItemRepository.delete(line);
+        lineItemRepository.flush();
+        return toView(so, true);
+    }
+
+    @Transactional
+    public SalesOrderView deallocateAllocation(UUID salesOrderId, UUID allocationId) {
+        SalesOrder so = requireSalesOrder(salesOrderId);
+        if (!"PENDING".equals(so.getStatus()) && !"IN_PROGRESS".equals(so.getStatus())) {
+            throw new BusinessRuleException("Cannot deallocate stock on order in status " + so.getStatus());
+        }
+        SalesOrderAllocation alloc = allocationRepository.findById(allocationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Allocation not found: " + allocationId));
+        SalesOrderLineItem line = lineItemRepository.findById(alloc.getLineItemId())
+                .filter(l -> l.getSalesOrderId().equals(so.getId()))
+                .orElseThrow(() -> new ResourceNotFoundException("Allocation does not belong to sales order " + so.getReference()));
+        if (alloc.isShipped()) {
+            throw new BusinessRuleException("Cannot deallocate an already shipped allocation");
+        }
+        stockOperationsPort.adjustAllocatedToSalesDelta(line.getPartId(), alloc.getQuantity().negate());
+        allocationRepository.delete(alloc);
+        allocationRepository.flush();
+        return toView(so, true);
+    }
+
+    @Transactional
     public SalesOrderView issueSalesOrder(UUID salesOrderId) {
         SalesOrder so = requireSalesOrder(salesOrderId);
         if (!"PENDING".equals(so.getStatus())) {
             throw new BusinessRuleException("Only PENDING sales orders can be issued");
+        }
+        if (lineItemRepository.findBySalesOrderIdOrderByCreatedAtAsc(so.getId()).isEmpty()) {
+            throw new BusinessRuleException("Cannot issue a sales order with no line items");
         }
         so.setStatus("IN_PROGRESS");
         SalesOrder saved = salesOrderRepository.saveAndFlush(so);
@@ -311,6 +385,16 @@ public class SalesOrderService {
         }
         if (cmd.quantity() == null || cmd.quantity().compareTo(BigDecimal.ZERO) <= 0 || cmd.quantity().compareTo(item.quantity()) > 0) {
             throw new BusinessRuleException("Invalid allocation quantity");
+        }
+        BigDecimal alreadyAllocated = allocationRepository.findByLineItemIdOrderByCreatedAtAsc(line.getId()).stream()
+                .filter(a -> !a.isShipped())
+                .map(SalesOrderAllocation::getQuantity)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal remainingToAllocate = line.getQuantity().subtract(line.getShipped()).subtract(alreadyAllocated);
+        if (cmd.quantity().compareTo(remainingToAllocate) > 0) {
+            throw new BusinessRuleException(
+                    "Cannot allocate more than remaining ordered quantity (" + remainingToAllocate + ")"
+            );
         }
 
         SalesOrderAllocation alloc = new SalesOrderAllocation();

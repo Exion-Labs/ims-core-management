@@ -94,6 +94,15 @@ public class SalesOrderController {
         return salesOrderService.allocateStock(id, cmd);
     }
 
+    @DeleteMapping("/{id}/allocations/{allocationId}")
+    @PreAuthorize("hasAuthority('ORDER:UPDATE')")
+    public SalesOrderService.SalesOrderView deallocate(
+            @PathVariable UUID id,
+            @PathVariable UUID allocationId
+    ) {
+        return salesOrderService.deallocateAllocation(id, allocationId);
+    }
+
     @PostMapping("/{id}/shipments/{shipmentId}/complete")
     @PreAuthorize("hasAuthority('ORDER:UPDATE')")
     public SalesOrderService.SalesOrderView completeShipment(

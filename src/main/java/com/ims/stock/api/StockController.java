@@ -123,11 +123,12 @@ public class StockController {
             @RequestParam(required = false) String batchCode,
             @RequestParam(required = false) String serialNumber,
             @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "false") boolean inWarehouseOnly,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "25") int size
     ) {
         StockService.StockSearchFilter filter = new StockService.StockSearchFilter(
-                partId, locationId, includeSublocations, status, batchCode, serialNumber, q
+                partId, locationId, includeSublocations, status, batchCode, serialNumber, q, inWarehouseOnly
         );
         return stockService.searchStockItems(
                 filter,

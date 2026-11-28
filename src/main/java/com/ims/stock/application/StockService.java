@@ -180,8 +180,21 @@ public class StockService {
             String status,
             String batchCode,
             String serialNumber,
-            String q
-    ) {}
+            String q,
+            Boolean inWarehouseOnly
+    ) {
+        public StockSearchFilter(
+                UUID partId,
+                UUID locationId,
+                boolean includeSublocations,
+                String status,
+                String batchCode,
+                String serialNumber,
+                String q
+        ) {
+            this(partId, locationId, includeSublocations, status, batchCode, serialNumber, q, null);
+        }
+    }
 
     private final StockItemRepository stockItemRepository;
     private final StockLocationRepository locationRepository;
@@ -241,6 +254,10 @@ public class StockService {
 
             if (filter.partId() != null) {
                 preds.add(cb.equal(root.get("partId"), filter.partId()));
+            }
+            if (Boolean.TRUE.equals(filter.inWarehouseOnly())) {
+                preds.add(cb.isNull(root.get("customerId")));
+                preds.add(cb.isNull(root.get("installedInId")));
             }
 
             if (filter.locationId() != null) {
